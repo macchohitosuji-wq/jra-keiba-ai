@@ -821,16 +821,12 @@ if (
 
     # 0〜100点に換算する
     def normalize_score(series):
-        low = series.min()
-        high = series.max()
+    series = pd.to_numeric(series, errors="coerce")
 
-        if pd.isna(low) or pd.isna(high):
-            return pd.Series(50.0, index=series.index)
+    # タイム指数の仮の基準：50を0点、110を100点
+    score = (series - 50) / 60 * 100
 
-        if high == low:
-            return pd.Series(50.0, index=series.index)
-
-        return (series - low) / (high - low) * 100
+    return score.clip(0, 100).fillna(50)
 
     auto_df["最高点"] = normalize_score(auto_df["最高"])
     auto_df["距離点"] = normalize_score(auto_df["距離"])
