@@ -460,6 +460,7 @@ time_index_text = st.text_area(
 )
 
 
+
 if st.button("タイム指数を読み取る"):
     import re
 
@@ -470,63 +471,63 @@ if st.button("タイム指数を読み取る"):
     ]
 
     parsed_horses = []
-    current_horse = None
+    i = 0
 
-    for line in lines:
-        # Markdown表の装飾やリンク記法を除去
-        clean = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", line)
-        clean = clean.replace("**", "").replace("<br>", " ")
-        clean = clean.replace("|", " ")
-        clean = clean.strip()
+    while i < len(lines):
+        # 枠番・馬番・印・馬名の順で並ぶ形式に対応
+        if (
+            re.fullmatch(r"\d{1,2}", lines[i])
+            and i + 3 < len(lines)
+            and re.fullmatch(r"\d{1,2}", lines[i + 1])
+            and re.fullmatch(r"--?", lines[i + 2])
+        ):
+            frame = int(lines[i])
+            number = int(lines[i + 1])
+            name_line = lines[i + 3]
 
-        # 馬番と馬名の行を検出
-        match = re.match(
-            r"^\s*(\d{1,2})\s+--?\s+(.+?)\s+"
-            r"(牡|牝|セ)\s*\d+\s+",
-            clean
-        )
+            # 馬名と、年齢・斤量などの情報が同じ行にある
+            parts = re.split(r"\t+", name_line)
 
-        if match:
-            number = int(match.group(1))
-            name = match.group(2).strip()
+            if len(parts) >= 3:
+                name = parts[0].strip()
+                values = parts[1:]
 
-            current_horse = {
-                "馬番": number,
-                "馬名": name,
-            }
-            parsed_horses.append(current_horse)
-            continue
+                # 性齢・斤量・騎手を除いた数値を取得
+                numeric_values = []
 
-        # 数字が並ぶ行から指数を抽出
-        if current_horse is not None:
-            values = re.findall(
-                r"(?<![\w.])\d+(?:\.\d+)?\*?(?![\w.])",
-                clean
-            )
+                for value in values:
+                    value = value.strip().replace("*", "")
+                    if re.fullmatch(r"\d+(?:\.\d+)?", value):
+                        numeric_values.append(float(value))
 
-            if len(values) >= 9:
-                try:
-                    nums = [v.replace("*", "") for v in values]
+                if len(numeric_values) >= 11:
+                    # 性齢・斤量・騎手の後に指数9項目が続く
+                    nums = numeric_values[-9:]
 
-                    current_horse.update({
-                        "最高": float(nums[0]),
-                        "5走平均": float(nums[1]),
-                        "距離": float(nums[2]),
-                        "コース": float(nums[3]),
-                        "3走前": float(nums[4]),
-                        "2走前": float(nums[5]),
-                        "前走": float(nums[6]),
-                        "単勝オッズ": float(nums[7]),
-                        "人気": int(float(nums[8])),
+                    parsed_horses.append({
+                        "枠番": frame,
+                        "馬番": number,
+                        "馬名": name,
+                        "最高": nums[0],
+                        "5走平均": nums[1],
+                        "距離": nums[2],
+                        "コース": nums[3],
+                        "3走前": nums[4],
+                        "2走前": nums[5],
+                        "前走": nums[6],
+                        "単勝オッズ": nums[7],
+                        "人気": int(nums[8]),
                     })
-                except (ValueError, IndexError):
-                    pass
+
+            i += 4
+        else:
+            i += 1
 
     if parsed_horses:
         parsed_df = pd.DataFrame(parsed_horses)
 
         st.success(
-            f"{len(parsed_df)}頭分の馬番・馬名を検出しました。"
+            f"{len(parsed_df)}頭分のデータを読み取りました。"
         )
         st.dataframe(
             parsed_df,
@@ -540,8 +541,8 @@ if st.button("タイム指数を読み取る"):
         )
     else:
         st.error(
-            "馬番・馬名を読み取れませんでした。"
-            "表のコピー形式を確認する必要があります。"
+            "読み取れませんでした。"
+            "コピー形式をもう一度確認しましょう。"
         )
 
 
