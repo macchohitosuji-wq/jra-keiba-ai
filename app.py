@@ -351,7 +351,8 @@ if st.button("馬番・馬名を取り込む"):
         imported_df = imported_df.drop_duplicates(
             subset=["馬番"], keep="first"
         )
-        
+        st.session_state["training_df"] = training_df
+        st.session_state["training_df_ready"] = True
 
         st.session_state["imported_horses"] = imported_df
         st.success(
