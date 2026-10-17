@@ -544,3 +544,107 @@ if history_file is not None:
             f"検証記録の読み込みに失敗しました：{e}"
         )
 
+
+st.divider()
+st.header("💰 STEP 18-2：馬券収支・回収率の記録")
+
+st.write(
+    "レースごとの実際の購入額と払戻額を入力し、"
+    "収支・回収率を計算します。"
+)
+
+st.caption(
+    "購入額・払戻額は実際の金額を入力してください。"
+    "購入しなかったレースは登録しないでください。"
+)
+
+with st.form("bet_record_form"):
+    bet_race_name = st.text_input(
+        "レース名",
+        placeholder="例：2026-10-18 秋華賞"
+    )
+
+    bet_amount = st.number_input(
+        "購入額（円）",
+        min_value=100,
+        max_value=1000000,
+        value=1000,
+        step=100
+    )
+
+    payout_amount = st.number_input(
+        "払戻額（円）",
+        min_value=0,
+        max_value=100000000,
+        value=0,
+        step=100
+    )
+
+    save_bet = st.form_submit_button(
+        "収支を計算"
+    )
+
+if save_bet:
+    if not bet_race_name.strip():
+        st.error("レース名を入力してください。")
+    elif bet_amount <= 0:
+        st.error("購入額は0円より大きくしてください。")
+    else:
+        profit = int(payout_amount - bet_amount)
+        recovery = payout_amount / bet_amount * 100
+
+        st.subheader("今回の収支")
+
+        col1, col2, col3 = st.columns(3)
+
+        col1.metric(
+            "購入額",
+            f"{bet_amount:,}円"
+        )
+
+        col2.metric(
+            "払戻額",
+            f"{payout_amount:,}円"
+        )
+
+        col3.metric(
+            "収支",
+            f"{profit:+,}円"
+        )
+
+        st.metric(
+            "回収率",
+            f"{recovery:.1f}%"
+        )
+
+        # ダウンロードできる記録CSVを作成
+        bet_record = pd.DataFrame([{
+            "レース名": bet_race_name.strip(),
+            "購入額": int(bet_amount),
+            "払戻額": int(payout_amount),
+            "収支": profit,
+            "回収率(%)": round(recovery, 1),
+        }])
+
+        st.download_button(
+            label="📥 この収支記録をCSV保存",
+            data=bet_record.to_csv(
+                index=False
+            ).encode("utf-8-sig"),
+            file_name="jra_bet_record.csv",
+            mime="text/csv",
+            key="download_bet_record",
+        )
+
+        if profit > 0:
+            st.success("今回はプラス収支です。")
+        elif profit < 0:
+            st.warning("今回はマイナス収支です。")
+        else:
+            st.info("今回は収支が±0円です。")
+
+st.caption(
+    "回収率 = 払戻額 ÷ 購入額 × 100。"
+    "回収率100%は収支±0円です。"
+    "この機能は記録用であり、将来の利益を保証するものではありません。"
+)
