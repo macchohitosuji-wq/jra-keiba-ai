@@ -648,3 +648,197 @@ st.caption(
     "回収率100%は収支±0円です。"
     "この機能は記録用であり、将来の利益を保証するものではありません。"
 )
+
+
+st.divider()
+st.header("📈 STEP 18-3：通算収支ダッシュボード")
+
+st.write(
+    "保存した馬券収支CSVをまとめて読み込み、"
+    "通算成績を集計します。"
+)
+
+st.caption(
+    "STEP 18-2で保存した jra_bet_record.csv を使用できます。"
+    "複数レースを集計する場合は、記録を1つのCSVにまとめてください。"
+)
+
+history_bet_file = st.file_uploader(
+    "馬券収支の記録CSV",
+    type=["csv"],
+    key="history_bet_csv_uploader",
+)
+
+if history_bet_file is not None:
+    try:
+        try:
+            history_bet_file.seek(0)
+            bet_history = pd.read_csv(
+                history_bet_file,
+                encoding="utf-8-sig"
+            )
+        except UnicodeDecodeError:
+            history_bet_file.seek(0)
+            bet_history = pd.read_csv(
+                history_bet_file,
+                encoding="cp932"
+            )
+
+        bet_history.columns = (
+            bet_history.columns.astype(str).str.strip()
+        )
+
+        required_bet_columns = [
+            "レース名", "購入額", "払戻額"
+        ]
+
+        missing_bet_columns = [
+            col for col in required_bet_columns
+            if col not in bet_history.columns
+        ]
+
+        if missing_bet_columns:
+            st.error(
+                "CSVに必要な列がありません："
+                + "、".join(missing_bet_columns)
+            )
+        else:
+            bet_history["購入額"] = pd.to_numeric(
+                bet_history["購入額"],
+                errors="coerce"
+            )
+
+            bet_history["払戻額"] = pd.to_numeric(
+                bet_history["払戻額"],
+                errors="coerce"
+            )
+
+            valid = (
+                bet_history["レース名"].notna()
+                & (bet_history["レース名"].astype(str).str.strip() != "")
+                & bet_history["購入額"].notna()
+                & bet_history["払戻額"].notna()
+                & (bet_history["購入額"] > 0)
+                & (bet_history["払戻額"] >= 0)
+            )
+
+            invalid_count = int((~valid).sum())
+            bet_history = bet_history.loc[valid].copy()
+
+            if invalid_count:
+                st.warning(
+                    f"{invalid_count}行を無効なデータとして除外しました。"
+                )
+
+            if bet_history.empty:
+                st.warning(
+                    "集計できる有効な記録がありません。"
+                )
+            else:
+                # CSV内の各行を1件の購入記録として集計
+                bet_history["収支"] = (
+                    bet_history["払戻額"]
+                    - bet_history["購入額"]
+                )
+
+                total_bet = bet_history["購入額"].sum()
+                total_payout = bet_history["払戻額"].sum()
+                total_profit = total_payout - total_bet
+                recovery_rate = (
+                    total_payout / total_bet * 100
+                )
+
+                # レース単位の収支を集計
+                race_summary = (
+                    bet_history.groupby(
+                        "レース名",
+                        as_index=False
+                    )
+                    .agg(
+                        購入額=("購入額", "sum"),
+                        払戻額=("払戻額", "sum"),
+                    )
+                )
+
+                race_summary["収支"] = (
+                    race_summary["払戻額"]
+                    - race_summary["購入額"]
+                )
+
+                win_races = int(
+                    (race_summary["収支"] > 0).sum()
+                )
+                lose_races = int(
+                    (race_summary["収支"] < 0).sum()
+                )
+                even_races = int(
+                    (race_summary["収支"] == 0).sum()
+                )
+
+                st.subheader("通算成績")
+
+                c1, c2 = st.columns(2)
+                c1.metric(
+                    "集計レース数",
+                    f"{len(race_summary)}レース"
+                )
+                c2.metric(
+                    "購入記録数",
+                    f"{len(bet_history)}件"
+                )
+
+                c3, c4, c5 = st.columns(3)
+                c3.metric(
+                    "総購入額",
+                    f"{total_bet:,.0f}円"
+                )
+                c4.metric(
+                    "総払戻額",
+                    f"{total_payout:,.0f}円"
+                )
+                c5.metric(
+                    "通算収支",
+                    f"{total_profit:+,.0f}円"
+                )
+
+                st.metric(
+                    "通算回収率",
+                    f"{recovery_rate:.1f}%"
+                )
+
+                c6, c7, c8 = st.columns(3)
+                c6.metric("プラス収支", f"{win_races}レース")
+                c7.metric("マイナス収支", f"{lose_races}レース")
+                c8.metric("収支±0円", f"{even_races}レース")
+
+                st.subheader("レース別収支")
+
+                st.dataframe(
+                    race_summary.sort_values(
+                        "収支", ascending=False
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                st.download_button(
+                    label="📥 集計結果をCSV保存",
+                    data=race_summary.to_csv(
+                        index=False
+                    ).encode("utf-8-sig"),
+                    file_name="jra_bet_summary.csv",
+                    mime="text/csv",
+                    key="download_bet_summary",
+                )
+
+                st.caption(
+                    "通算回収率 = 総払戻額 ÷ 総購入額 × 100。"
+                    "同じレース名の記録は1レースとしてまとめます。"
+                    "CSVの各行は購入記録として扱うため、"
+                    "同じ記録を重複して取り込まないよう注意してください。"
+                )
+
+    except Exception as e:
+        st.error(
+            f"収支CSVの読み込みに失敗しました：{e}"
+        )
