@@ -459,11 +459,91 @@ time_index_text = st.text_area(
     key="time_index_text",
 )
 
+
 if st.button("タイム指数を読み取る"):
-    st.info(
-        "取り込み処理を次のステップで追加します。"
-        "今はまだ解析・反映は行いません。"
-    )
+    import re
+
+    lines = [
+        line.strip()
+        for line in time_index_text.splitlines()
+        if line.strip()
+    ]
+
+    parsed_horses = []
+    current_horse = None
+
+    for line in lines:
+        # Markdown表の装飾やリンク記法を除去
+        clean = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", line)
+        clean = clean.replace("**", "").replace("<br>", " ")
+        clean = clean.replace("|", " ")
+        clean = clean.strip()
+
+        # 馬番と馬名の行を検出
+        match = re.match(
+            r"^\s*(\d{1,2})\s+--?\s+(.+?)\s+"
+            r"(牡|牝|セ)\s*\d+\s+",
+            clean
+        )
+
+        if match:
+            number = int(match.group(1))
+            name = match.group(2).strip()
+
+            current_horse = {
+                "馬番": number,
+                "馬名": name,
+            }
+            parsed_horses.append(current_horse)
+            continue
+
+        # 数字が並ぶ行から指数を抽出
+        if current_horse is not None:
+            values = re.findall(
+                r"(?<![\w.])\d+(?:\.\d+)?\*?(?![\w.])",
+                clean
+            )
+
+            if len(values) >= 9:
+                try:
+                    nums = [v.replace("*", "") for v in values]
+
+                    current_horse.update({
+                        "最高": float(nums[0]),
+                        "5走平均": float(nums[1]),
+                        "距離": float(nums[2]),
+                        "コース": float(nums[3]),
+                        "3走前": float(nums[4]),
+                        "2走前": float(nums[5]),
+                        "前走": float(nums[6]),
+                        "単勝オッズ": float(nums[7]),
+                        "人気": int(float(nums[8])),
+                    })
+                except (ValueError, IndexError):
+                    pass
+
+    if parsed_horses:
+        parsed_df = pd.DataFrame(parsed_horses)
+
+        st.success(
+            f"{len(parsed_df)}頭分の馬番・馬名を検出しました。"
+        )
+        st.dataframe(
+            parsed_df,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        st.caption(
+            "読み取り結果の確認用です。"
+            "まだ予想AIの評価表には反映していません。"
+        )
+    else:
+        st.error(
+            "馬番・馬名を読み取れませんでした。"
+            "表のコピー形式を確認する必要があります。"
+        )
+
 
 st.caption(
     "各評価を0〜100点で入力してください。"
