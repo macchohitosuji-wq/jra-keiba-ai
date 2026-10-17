@@ -470,7 +470,7 @@ if st.button("調教データを読み取る"):
         if line.strip()
     ]
     st.write("調教データのコピー内容（確認用）")
-st.code(repr(training_text[:1500]))
+    st.code(repr(training_text[:1500]))
 
     parsed_training = []
 
