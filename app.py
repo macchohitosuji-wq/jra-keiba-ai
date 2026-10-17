@@ -1554,6 +1554,55 @@ if historical_file is not None:
                     use_container_width=True,
                     hide_index=True,
                 )
+                
+                st.subheader("📊 評価項目と確定着順の関係")
+
+                score_columns = [
+                    "近走成績",
+                    "距離適性",
+                    "脚質・展開",
+                    "血統適性",
+                    "調教評価",
+                    "馬場適性",
+                ]
+
+                if (
+                    historical_df["レースID"].nunique() < 2
+                    or len(historical_df) < 5
+                ):
+                    st.info(
+                        "分析には複数レースのデータを推奨します。"
+                        "現在は参考値として確認してください。"
+                    )
+
+                correlations = (
+                    historical_df[
+                        score_columns + ["着順"]
+                    ]
+                    .corr(method="spearman")["着順"]
+                    .drop("着順")
+                    .rename("着順との相関")
+                    .reset_index()
+                    .rename(columns={"index": "評価項目"})
+                )
+
+                correlations["着順との相関"] = (
+                    correlations["着順との相関"].round(3)
+                )
+
+                st.dataframe(
+                    correlations,
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                st.caption(
+                    "相関がマイナスなら、その評価項目が高い馬ほど"
+                    "着順の数字が小さい傾向、プラスなら逆の傾向です。"
+                    "相関は因果関係を示すものではなく、"
+                    "データが少ない場合は結果が不安定です。"
+                )
+
 
     except Exception as e:
         st.error(
