@@ -671,7 +671,32 @@ if st.button("タイム指数を読み取る"):
         )
 
 
+# ========================================
+# 取り込んだ調教評価を出走馬データに反映
+# ========================================
+if st.session_state.get("training_df_ready", False):
+    training_df = st.session_state["training_df"]
 
+    training_score_map = {
+        "A": 90,
+        "B": 75,
+        "C": 60,
+    }
+
+    for index, row in horses_input.iterrows():
+        horse_number = row["馬番"]
+
+        matched = training_df[
+            training_df["馬番"] == horse_number
+        ]
+
+        if not matched.empty:
+            rating = matched.iloc[0]["調教評価"]
+
+            if rating in training_score_map:
+                horses_input.at[index, "調教評価"] = (
+                    training_score_map[rating]
+                )
 st.caption(
     "各評価を0〜100点で入力してください。"
     "CSVを読み込んだ場合も、ここで修正できます。"
