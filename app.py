@@ -1045,11 +1045,13 @@ if (
                 )
 
 
+                
                 mark_stats["複勝率(%)"] = (
-                    mark_stats["3着以内"]
+                    mark_stats["複勝対象数"]
                     / mark_stats["対象頭数"]
                     * 100
                 ).round(1)
+
 
                 st.subheader("印ごとの成績")
                 st.dataframe(
