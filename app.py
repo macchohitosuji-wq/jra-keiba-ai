@@ -400,27 +400,32 @@ st.write(
 if not horses.empty:
     horses = horses.copy()
 
-    horses["馬名"] = horses["馬名"].fillna("").astype(str).str.strip()
-
-    for col in weights:
-    horses[col] = pd.to_numeric(
-        horses[col], errors="coerce"
+    horses["馬名"] = (
+        horses["馬名"].fillna("").astype(str).str.strip()
     )
 
-# 6項目すべてが同じ50点の場合は、
-# 自動評価がまだ行われていない可能性がある
-score_columns = list(weights.keys())
+    for col in weights:
+        horses[col] = pd.to_numeric(
+            horses[col], errors="coerce"
+        )
 
-horses["評価未確認"] = (
-    horses[score_columns].eq(50).all(axis=1)
-)
+    # 6項目すべてが50点なら評価未確認とする
+    score_columns = list(weights.keys())
 
+    horses["評価未確認"] = (
+        horses[score_columns].eq(50).all(axis=1)
+    )
+
+    # 配点に基づく総合評価点
     horses["評価点"] = sum(
         horses[col] * weight
         for col, weight in weights.items()
     ).round(1)
 
-    horses = horses.dropna(subset=["評価点", "馬番"])
+    horses = horses.dropna(
+        subset=["評価点", "馬番"]
+    )
+
     horses = horses[horses["馬名"] != ""]
 
     horses = horses.sort_values(
@@ -433,7 +438,6 @@ horses["評価未確認"] = (
         marks[i] if i < len(marks) else ""
         for i in range(len(horses))
     ]
-
     st.header(f"🏆 {race_name} 全頭評価")
 
     st.dataframe(
