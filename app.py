@@ -905,6 +905,53 @@ if (
         hide_index=True,
     )
     
+    st.subheader("🎯 穴馬候補ランキング")
+
+    hole_df = auto_df.copy()
+
+    # 人気薄の馬を優先（人気の数字が大きいほど人気薄）
+    hole_df["人気"] = pd.to_numeric(
+        hole_df["人気"], errors="coerce"
+    )
+
+    # 指数・調教に強みがある馬を評価
+    hole_df["穴馬スコア"] = (
+        hole_df["最高点"] * 0.30
+        + hole_df["距離点"] * 0.20
+        + hole_df["コース点"] * 0.20
+        + hole_df["調教点"] * 0.30
+    )
+
+    # 人気薄に加点。人気不明は加点しない
+    hole_df["穴馬スコア"] += (
+        hole_df["人気"].fillna(0).clip(0, 18) * 1.5
+    )
+
+    # 総合点上位5頭は穴馬候補から外す
+    top_numbers = set(
+        auto_df.nlargest(5, "総合点")["馬番"]
+    )
+
+    hole_df = hole_df[
+        ~hole_df["馬番"].isin(top_numbers)
+    ].copy()
+
+    hole_df = hole_df.sort_values(
+        "穴馬スコア", ascending=False
+    )
+
+    st.dataframe(
+        hole_df[
+            [
+                "馬番", "馬名", "人気",
+                "最高", "距離", "コース",
+                "調教評価", "穴馬スコア"
+            ]
+        ].head(5),
+        use_container_width=True,
+        hide_index=True,
+    )
+
     st.subheader("📊 実際の着順で予想を検証")
 
     result_text = st.text_input(
