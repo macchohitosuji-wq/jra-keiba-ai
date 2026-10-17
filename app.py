@@ -562,7 +562,7 @@ if st.button("調教データを読み取る"):
             "コピー内容と列の区切りを確認しましょう。"
         )
 
-st.header("📋 出走馬データ")
+
 
 # ========================================
 # タイム指数データのコピペ取り込み
@@ -695,6 +695,7 @@ if st.session_state.get("training_df_ready", False):
                 horses_input.at[index, "調教評価"] = (
                     training_score_map[rating]
                 )
+st.header("📋 出走馬データ")                
 st.caption(
     "各評価を0〜100点で入力してください。"
     "CSVを読み込んだ場合も、ここで修正できます。"
