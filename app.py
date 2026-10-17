@@ -1287,12 +1287,94 @@ if analysis_file is not None:
 # ========================================
 # 過去レースの記録一覧
 # ========================================
+
 st.header("📚 過去レースの記録")
 
 history = st.session_state["race_history"]
 
 if history:
     history_df = pd.DataFrame(history)
+
+    # 数値データを集計できる形に整える
+    history_df["着順"] = pd.to_numeric(
+        history_df["着順"], errors="coerce"
+    )
+    history_df["評価点"] = pd.to_numeric(
+        history_df["評価点"], errors="coerce"
+    )
+
+    # レース単位で集計
+    race_count = history_df["レースID"].nunique()
+
+    honmei_df = history_df[
+        history_df["印"] == "◎"
+    ].dropna(subset=["着順"])
+
+    if not honmei_df.empty:
+        honmei_win_rate = (
+            (honmei_df["着順"] == 1).mean() * 100
+        )
+        honmei_place_rate = (
+            (honmei_df["着順"] <= 3).mean() * 100
+        )
+    else:
+        honmei_win_rate = 0.0
+        honmei_place_rate = 0.0
+
+    # 各レースの評価上位3頭を抽出
+    top3_list = []
+
+    for race_id, group in history_df.groupby("レースID"):
+        group = group.dropna(
+            subset=["評価点", "着順"]
+        )
+
+        top3 = group.sort_values(
+            "評価点", ascending=False
+        ).head(3)
+
+        if not top3.empty:
+            top3_list.append(top3)
+
+    if top3_list:
+        top3_df = pd.concat(
+            top3_list, ignore_index=True
+        )
+        top3_place_rate = (
+            (top3_df["着順"] <= 3).mean() * 100
+        )
+        top3_hit_count = int(
+            (top3_df["着順"] <= 3).sum()
+        )
+        top3_total = len(top3_df)
+    else:
+        top3_place_rate = 0.0
+        top3_hit_count = 0
+        top3_total = 0
+
+    # 集計ダッシュボード
+    st.subheader("📈 予想精度ダッシュボード")
+
+    col1, col2 = st.columns(2)
+    col1.metric("記録レース数", f"{race_count}レース")
+    col2.metric("◎の勝率", f"{honmei_win_rate:.1f}%")
+
+    col3, col4 = st.columns(2)
+    col3.metric("◎の複勝率", f"{honmei_place_rate:.1f}%")
+    col4.metric(
+        "評価上位3頭の複勝圏入り率",
+        f"{top3_place_rate:.1f}%"
+    )
+
+    st.caption(
+        f"◎の集計対象：{len(honmei_df)}頭分"
+        f" ／ 評価上位3頭：{top3_hit_count}/{top3_total}頭"
+    )
+
+    st.divider()
+
+    # 記録一覧
+    st.subheader("📋 保存したレース結果")
 
     st.dataframe(
         history_df,
@@ -1310,27 +1392,8 @@ if history:
         mime="text/csv",
     )
 
-    # ◎の複勝率を集計
-    honmei_df = history_df[
-        history_df["印"] == "◎"
-    ]
-
-    if not honmei_df.empty:
-        place_rate = (
-            (honmei_df["着順"] <= 3).mean() * 100
-        )
-
-        st.metric(
-            "◎の複勝率",
-            f"{place_rate:.1f}%"
-        )
-
-        st.caption(
-            f"集計対象：◎ {len(honmei_df)}頭分"
-        )
 else:
     st.info(
         "まだ記録がありません。"
         "予想と結果を照合し、保存ボタンを押してください。"
     )
-
