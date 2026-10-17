@@ -473,7 +473,7 @@ if st.button("調教データを読み取る"):
     ]
 
     parsed_training = []
-        i = 0
+    i = 0
 
     while i < len(lines):
         # 馬番 → 印(--など) → 馬名とデータ
