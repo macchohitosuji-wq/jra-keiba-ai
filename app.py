@@ -904,6 +904,69 @@ if (
         use_container_width=True,
         hide_index=True,
     )
+    
+    st.subheader("📊 実際の着順で予想を検証")
+
+    result_text = st.text_input(
+        "実際の着順（1着から馬番を入力）",
+        placeholder="例：10, 6, 3, 14, 5",
+        key="actual_result_text",
+    )
+
+    if st.button("予想と実際の結果を比較"):
+        import re
+
+        result_numbers = [
+            int(x)
+            for x in re.findall(r"\d+", result_text)
+        ]
+
+        if not result_numbers:
+            st.warning("実際の着順を入力してください。")
+        elif len(result_numbers) != len(set(result_numbers)):
+            st.warning("同じ馬番が重複しています。")
+        else:
+            actual_order = {
+                number: rank
+                for rank, number in enumerate(
+                    result_numbers, start=1
+                )
+            }
+
+            check_df = auto_df.copy()
+            check_df["実着順"] = (
+                check_df["馬番"].map(actual_order)
+            )
+
+            check_df = check_df.sort_values(
+                "総合点", ascending=False
+            )
+
+            st.write(
+                "実際の着順を入力した馬だけ、"
+                "実着順が表示されます。"
+            )
+
+            st.dataframe(
+                check_df[
+                    [
+                        "馬番", "馬名", "人気",
+                        "総合点", "印", "実着順"
+                    ]
+                ],
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.download_button(
+                "検証結果をCSVで保存",
+                data=check_df.to_csv(
+                    index=False
+                ).encode("utf-8-sig"),
+                file_name="keiba_ai_kensho.csv",
+                mime="text/csv",
+            )
+
     st.header(f"🏆 {race_name} 全頭評価")
 
     st.dataframe(
