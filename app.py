@@ -553,6 +553,8 @@ if st.button("調教データを読み取る"):
 
     if parsed_training:
         training_df = pd.DataFrame(parsed_training)
+        st.session_state["training_df"] = training_df
+        st.session_state["training_df_ready"] = True
 
         training_df = training_df.drop_duplicates(
             subset=["馬番"],
@@ -568,6 +570,7 @@ if st.button("調教データを読み取る"):
             use_container_width=True,
             hide_index=True,
         )
+        st.write("調教データの列名", training_df.columns.tolist())
 
         st.caption(
             "読み取り結果の確認用です。"
