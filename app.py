@@ -107,7 +107,8 @@ if st.button("出馬表を読み込む"):
     if racecard_text.strip():
         st.session_state["racecard_text"] = racecard_text
         st.success("出馬表を受け付けました。")
-                parsed_racecard = parse_racecard(racecard_text)
+
+        parsed_racecard = parse_racecard(racecard_text)
 
         if not parsed_racecard.empty:
             st.subheader("🐎 取り込み結果")
