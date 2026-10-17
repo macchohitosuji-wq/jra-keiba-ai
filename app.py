@@ -977,12 +977,16 @@ if analysis_file is not None:
                     and correlation_data["評価点"].nunique() > 1
                     and correlation_data["着順"].nunique() > 1
                 ):
-                    correlation = correlation_data[
-                        "評価点"
-                    ].corr(
-                        correlation_data["着順"],
-                        method="spearman"
+                    
+                    score_ranks = correlation_data["評価点"].rank(
+                        method="average", ascending=False
                     )
+                    finish_ranks = correlation_data["着順"].rank(
+                        method="average", ascending=True
+                    )
+
+                    correlation = score_ranks.corr(finish_ranks)
+
 
                     st.metric(
                         "評価点と着順の順位相関",
