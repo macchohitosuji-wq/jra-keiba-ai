@@ -107,6 +107,23 @@ if st.button("出馬表を読み込む"):
     if racecard_text.strip():
         st.session_state["racecard_text"] = racecard_text
         st.success("出馬表を受け付けました。")
+                parsed_racecard = parse_racecard(racecard_text)
+
+        if not parsed_racecard.empty:
+            st.subheader("🐎 取り込み結果")
+            st.dataframe(
+                parsed_racecard,
+                use_container_width=True,
+                hide_index=True
+            )
+            st.success(
+                f"{len(parsed_racecard)}頭のデータを取り込みました。"
+            )
+        else:
+            st.warning(
+                "馬データを読み取れませんでした。"
+                "出馬表の形式を確認してください。"
+            )
     else:
         st.warning("先に出馬表を貼り付けてください。")
 sample = pd.DataFrame({
