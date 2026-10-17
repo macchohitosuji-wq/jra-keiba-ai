@@ -665,6 +665,7 @@ if st.button("タイム指数を読み取る"):
 
     if parsed_horses:
         parsed_df = pd.DataFrame(parsed_horses)
+        st.session_state["time_index_df"] = parsed_df.copy()
 
         st.success(
             f"{len(parsed_df)}頭分のデータを読み取りました。"
