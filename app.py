@@ -445,6 +445,21 @@ if not horses.empty:
         use_container_width=True,
         hide_index=True,
     )
+    # 評価未確認の馬がいる場合は警告
+if "評価未確認" in horses.columns:
+    unconfirmed = horses[horses["評価未確認"]]
+
+    if not unconfirmed.empty:
+        st.warning(
+            f"評価が未確認の馬が{len(unconfirmed)}頭います。"
+            "全項目50点のため、実際の適性を評価できていません。"
+        )
+
+        st.dataframe(
+            unconfirmed[["馬番", "馬名"]],
+            use_container_width=True,
+            hide_index=True,
+        )
 
     st.header("🎯 買い目候補")
     st.write(f"予算：{budget:,}円")
