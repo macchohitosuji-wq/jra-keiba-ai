@@ -365,7 +365,79 @@ if st.button("馬番・馬名を取り込む"):
         st.error(
             "馬番・馬名を読み取れませんでした。"
             "馬番と馬名が別々の行になるように貼り付けてください。"
+# ========================================
+# STEP 10：近走成績の入力と自動評価
+# ========================================
+st.subheader("📈 近走成績から自動評価")
+
+st.write(
+    "直近3走の確定着順を入力すると、"
+    "近走成績の評価点を自動計算します。"
+)
+
+recent_results = st.data_editor(
+    pd.DataFrame({
+        "馬番": [1],
+        "馬名": [""],
+        "前走着順": [None],
+        "2走前着順": [None],
+        "3走前着順": [None],
+    }),
+    num_rows="dynamic",
+    use_container_width=True,
+    key="recent_results_editor",
+    column_config={
+        "馬番": st.column_config.NumberColumn(
+            "馬番", min_value=1, step=1
+        ),
+        "馬名": st.column_config.TextColumn("馬名"),
+        "前走着順": st.column_config.NumberColumn(
+            "前走着順", min_value=1, step=1
+        ),
+        "2走前着順": st.column_config.NumberColumn(
+            "2走前着順", min_value=1, step=1
+        ),
+        "3走前着順": st.column_config.NumberColumn(
+            "3走前着順", min_value=1, step=1
+        ),
+    },
+)
+
+if not recent_results.empty:
+    recent_cols = [
+        "前走着順",
+        "2走前着順",
+        "3走前着順",
+    ]
+
+    for col in recent_cols:
+        recent_results[col] = pd.to_numeric(
+            recent_results[col], errors="coerce"
         )
+
+    # 着順を点数化：1着100点、2着90点…10着以下10点
+    def finish_to_score(position):
+        if pd.isna(position) or position < 1:
+            return None
+        return max(10, 110 - int(position) * 10)
+
+    recent_results["自動算出_近走成績"] = (
+        recent_results[recent_cols]
+        .map(finish_to_score)
+        .mean(axis=1)
+        .round(1)
+    )
+
+    st.dataframe(
+        recent_results,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.caption(
+        "暫定ルールによる点数です。未入力の走は平均から除外します。"
+        "この点数は実証済みの予測モデルではありません。"
+    )        )
 st.header("📋 出走馬データ")
 st.caption(
     "各評価を0〜100点で入力してください。"
