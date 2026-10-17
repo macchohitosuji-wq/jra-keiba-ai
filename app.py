@@ -930,21 +930,32 @@ if analysis_file is not None:
 
                 mark_order = ["◎", "○", "▲", "△", "☆"]
 
-                mark_summary = (
-                    analysis_df[
-                        analysis_df["印"].isin(mark_order)
-                    ]
-                    .groupby("印")
-                    .agg(
-                        頭数=("着順", "count"),
-                        3着以内頭数=("3着以内", "sum"),
-                        平均着順=("着順", "mean"),
-                        平均評価点=("評価点", "mean"),
-                    )
-                    .reindex(mark_order)
-                    .dropna(subset=["頭数"])
-                    .reset_index()
-                )
+                
+mark_data = analysis_df[
+    analysis_df["印"].isin(mark_order)
+].copy()
+
+mark_summary = (
+    mark_data
+    .groupby("印")
+    .agg(
+        頭数=pd.NamedAgg(column="着順", aggfunc="count"),
+        平均着順=pd.NamedAgg(column="着順", aggfunc="mean"),
+        平均評価点=pd.NamedAgg(column="評価点", aggfunc="mean"),
+    )
+    .reindex(mark_order)
+    .dropna(subset=["頭数"])
+    .reset_index()
+)
+
+if not mark_summary.empty:
+    mark_summary["3着以内頭数"] = (
+        mark_data.groupby("印")["3着以内"]
+        .sum()
+        .reindex(mark_summary["印"])
+        .to_numpy()
+    )
+
 
                 if mark_summary.empty:
                     st.info(
