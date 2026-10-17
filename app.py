@@ -60,7 +60,20 @@ columns = [
     "馬番", "馬名", "近走成績", "距離適性",
     "脚質・展開", "血統適性", "調教評価", "馬場適性"
 ]
+st.subheader("📋 出馬表のコピペ取り込み")
 
+racecard_text = st.text_area(
+    "出馬表をそのまま貼り付けてください",
+    height=300,
+    placeholder="ここに出馬表を貼り付け"
+)
+
+if st.button("出馬表を読み込む"):
+    if racecard_text.strip():
+        st.session_state["racecard_text"] = racecard_text
+        st.success("出馬表を受け付けました。")
+    else:
+        st.warning("先に出馬表を貼り付けてください。")
 sample = pd.DataFrame({
     "馬番": [1, 2, 3, 4, 5],
     "馬名": [
