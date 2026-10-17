@@ -364,3 +364,183 @@ if result_file is not None:
 
     except Exception as e:
         st.error(f"結果CSVの読み込みに失敗しました：{e}")
+
+
+st.divider()
+st.header("📚 STEP 18：検証記録・成績集計")
+
+st.write(
+    "レースごとの検証結果をCSVに保存し、"
+    "あとから読み込んで複数レースの成績を集計できます。"
+)
+
+record_columns = [
+    "レース名",
+    "馬番",
+    "馬名",
+    "評価点",
+    "印",
+    "着順",
+]
+
+# 今回の検証結果を記録用CSVに変換
+if (
+    "comparison" in locals()
+    and isinstance(comparison, pd.DataFrame)
+    and not comparison.empty
+):
+    current_records = comparison[
+        ["馬番", "馬名", "評価点", "印", "着順"]
+    ].copy()
+
+    current_records.insert(0, "レース名", race_name)
+
+    current_records = current_records[record_columns]
+
+    st.download_button(
+        label="📥 今回の検証記録をダウンロード",
+        data=current_records.to_csv(
+            index=False
+        ).encode("utf-8-sig"),
+        file_name="jra_race_record.csv",
+        mime="text/csv",
+        key="download_current_record",
+    )
+else:
+    st.info(
+        "先にSTEP 17で確定着順CSVを読み込むと、"
+        "今回の検証記録をダウンロードできます。"
+    )
+
+st.subheader("📂 過去の検証記録を読み込む")
+
+history_file = st.file_uploader(
+    "過去の検証記録CSV",
+    type=["csv"],
+    key="history_csv_uploader",
+)
+
+if history_file is not None:
+    try:
+        try:
+            history_file.seek(0)
+            history = pd.read_csv(
+                history_file, encoding="utf-8-sig"
+            )
+        except UnicodeDecodeError:
+            history_file.seek(0)
+            history = pd.read_csv(
+                history_file, encoding="cp932"
+            )
+
+        history.columns = (
+            history.columns.astype(str).str.strip()
+        )
+
+        missing_history = [
+            col for col in record_columns
+            if col not in history.columns
+        ]
+
+        if missing_history:
+            st.error(
+                "記録CSVに必要な列がありません："
+                + "、".join(missing_history)
+            )
+        else:
+            history = history[record_columns].copy()
+
+            history["着順"] = pd.to_numeric(
+                history["着順"], errors="coerce"
+            )
+
+            history["評価点"] = pd.to_numeric(
+                history["評価点"], errors="coerce"
+            )
+
+            history = history.dropna(
+                subset=["着順", "評価点"]
+            )
+
+            st.success(
+                f"{len(history)}頭分の記録を読み込みました。"
+            )
+
+            st.subheader("📈 複数レースの成績")
+
+            race_count = history["レース名"].nunique()
+
+            st.metric(
+                "記録されたレース数",
+                f"{race_count}レース"
+            )
+
+            # 各レースの◎を集計対象にする
+            honmei = history[history["印"] == "◎"]
+
+            if not honmei.empty:
+                honmei_hits = int(
+                    (honmei["着順"] <= 3).sum()
+                )
+
+                honmei_rate = (
+                    honmei_hits / len(honmei) * 100
+                )
+
+                st.metric(
+                    "◎の3着以内率",
+                    f"{honmei_rate:.1f}%",
+                    f"{honmei_hits}/{len(honmei)}頭"
+                )
+            else:
+                st.info("◎の記録がありません。")
+
+            # 各レースの評価上位3頭を抽出
+            top3_records = (
+                history.sort_values(
+                    ["レース名", "評価点"],
+                    ascending=[True, False]
+                )
+                .groupby("レース名", sort=False)
+                .head(3)
+            )
+
+            if not top3_records.empty:
+                top3_hits = int(
+                    (top3_records["着順"] <= 3).sum()
+                )
+
+                top3_rate = (
+                    top3_hits / len(top3_records) * 100
+                )
+
+                st.metric(
+                    "評価上位3頭の3着以内率",
+                    f"{top3_rate:.1f}%",
+                    f"{top3_hits}/{len(top3_records)}頭"
+                )
+
+            st.subheader("記録一覧")
+
+            st.dataframe(
+                history.sort_values(
+                    ["レース名", "評価点"],
+                    ascending=[True, False]
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.caption(
+                "同じレース名を複数回記録すると同一レースとして集計されます。"
+                "別のレースは区別できる名前を付けてください。"
+                "記録はCSVをダウンロードして保管してください。"
+                "この集計は入力された記録に基づくもので、"
+                "将来の的中を保証するものではありません。"
+            )
+
+    except Exception as e:
+        st.error(
+            f"検証記録の読み込みに失敗しました：{e}"
+        )
+
