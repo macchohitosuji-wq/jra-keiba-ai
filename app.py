@@ -1036,12 +1036,14 @@ if (
                     actual_df["実着順"] <= 3
                 )
 
+                
                 mark_stats = actual_df.groupby(
                     "印", dropna=False
                 ).agg(
                     対象頭数=("実着順", "count"),
-                    3着以内=("3着以内", "sum"),
+                    複勝対象数=("3着以内", "sum"),
                 )
+
 
                 mark_stats["複勝率(%)"] = (
                     mark_stats["3着以内"]
