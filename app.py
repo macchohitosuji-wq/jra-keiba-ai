@@ -966,6 +966,114 @@ if (
                 file_name="keiba_ai_kensho.csv",
                 mime="text/csv",
             )
+            
+    st.divider()
+    st.subheader("📈 過去レースの検証履歴を分析")
+
+    history_files = st.file_uploader(
+        "過去レースの検証CSVをまとめて選択",
+        type=["csv"],
+        accept_multiple_files=True,
+        key="history_csv_files",
+    )
+
+    if history_files:
+        import pandas as pd
+
+        history_list = []
+
+        for file in history_files:
+            try:
+                df = pd.read_csv(file, encoding="utf-8-sig")
+
+                required_columns = [
+                    "馬番", "総合点", "印", "実着順"
+                ]
+
+                if all(
+                    col in df.columns
+                    for col in required_columns
+                ):
+                    df["レース名"] = file.name
+                    history_list.append(df)
+                else:
+                    st.warning(
+                        f"{file.name}：必要な列がありません。"
+                    )
+
+            except Exception as e:
+                st.warning(
+                    f"{file.name}：読み込みに失敗しました。"
+                )
+
+        if history_list:
+            history_df = pd.concat(
+                history_list, ignore_index=True
+            )
+
+            # 実際の着順が入力された馬だけで集計
+            actual_df = history_df.dropna(
+                subset=["実着順"]
+            ).copy()
+
+            actual_df["実着順"] = pd.to_numeric(
+                actual_df["実着順"], errors="coerce"
+            )
+            actual_df = actual_df.dropna(
+                subset=["実着順"]
+            )
+
+            st.write(
+                f"読み込んだレース数：{len(history_list)}"
+            )
+
+            if not actual_df.empty:
+                st.write(
+                    f"着順データのある馬：{len(actual_df)}頭"
+                )
+
+                actual_df["3着以内"] = (
+                    actual_df["実着順"] <= 3
+                )
+
+                mark_stats = actual_df.groupby(
+                    "印", dropna=False
+                ).agg(
+                    対象頭数=("実着順", "count"),
+                    3着以内=("3着以内", "sum"),
+                )
+
+                mark_stats["複勝率(%)"] = (
+                    mark_stats["3着以内"]
+                    / mark_stats["対象頭数"]
+                    * 100
+                ).round(1)
+
+                st.subheader("印ごとの成績")
+                st.dataframe(
+                    mark_stats.reset_index(),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                st.subheader("実際に好走した馬")
+                st.dataframe(
+                    actual_df.sort_values(
+                        "実着順"
+                    )[
+                        [
+                            "レース名", "馬番", "馬名",
+                            "印", "総合点", "実着順"
+                        ]
+                    ],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.warning(
+                    "CSVに実際の着順データがありません。"
+                )
+
 
     st.header(f"🏆 {race_name} 全頭評価")
 
