@@ -788,6 +788,115 @@ if not horses.empty:
         marks[i] if i < len(marks) else ""
         for i in range(len(horses))
     ]
+    # タイム指数と調教データによる自動採点
+if (
+    st.session_state.get("time_index_df") is not None
+    and st.session_state.get("training_df_ready", False)
+):
+    time_df = st.session_state["time_index_df"].copy()
+    training_df = st.session_state["training_df"].copy()
+
+    # 馬番を数値にそろえる
+    time_df["馬番"] = pd.to_numeric(
+        time_df["馬番"], errors="coerce"
+    )
+    training_df["馬番"] = pd.to_numeric(
+        training_df["馬番"], errors="coerce"
+    )
+
+    # タイム指数と調教データを馬番で照合
+    auto_df = time_df.merge(
+        training_df,
+        on="馬番",
+        how="left",
+        suffixes=("", "_調教")
+    )
+
+    # 各指数を数値に変換
+    score_columns = ["最高", "距離", "コース"]
+    for col in score_columns:
+        auto_df[col] = pd.to_numeric(
+            auto_df[col], errors="coerce"
+        )
+
+    # 0〜100点に換算する
+    def normalize_score(series):
+        low = series.min()
+        high = series.max()
+
+        if pd.isna(low) or pd.isna(high):
+            return pd.Series(50.0, index=series.index)
+
+        if high == low:
+            return pd.Series(50.0, index=series.index)
+
+        return (series - low) / (high - low) * 100
+
+    auto_df["最高点"] = normalize_score(auto_df["最高"])
+    auto_df["距離点"] = normalize_score(auto_df["距離"])
+    auto_df["コース点"] = normalize_score(auto_df["コース"])
+
+    # 調教ランクの点数
+    rank_scores = {
+        "S": 100,
+        "A": 90,
+        "B": 75,
+        "C": 60,
+        "D": 40,
+        "E": 20,
+    }
+
+    auto_df["ランク点"] = (
+        auto_df["調教評価"]
+        .astype(str)
+        .str.extract(r"([SABCDE])", expand=False)
+        .map(rank_scores)
+    )
+
+    # 調教の勝率・連対率・複勝率
+    for col in ["勝率(%)", "連対率(%)", "複勝率(%)"]:
+        auto_df[col] = pd.to_numeric(
+            auto_df[col], errors="coerce"
+        )
+
+    auto_df["調教点"] = (
+        auto_df["ランク点"].fillna(50) * 0.40
+        + auto_df["勝率(%)"].fillna(0) * 0.20
+        + auto_df["連対率(%)"].fillna(0) * 0.25
+        + auto_df["複勝率(%)"].fillna(0) * 0.15
+    )
+
+    # 総合点：タイム指数80%、調教20%
+    auto_df["総合点"] = (
+        auto_df["最高点"] * 0.35
+        + auto_df["距離点"] * 0.25
+        + auto_df["コース点"] * 0.20
+        + auto_df["調教点"] * 0.20
+    ).round(1)
+
+    auto_df = auto_df.sort_values(
+        "総合点", ascending=False
+    ).reset_index(drop=True)
+
+    marks = ["◎", "○", "▲", "△", "☆"]
+    auto_df["印"] = [
+        marks[i] if i < len(marks) else ""
+        for i in range(len(auto_df))
+    ]
+
+    st.subheader("🤖 タイム指数＋調教の自動予想")
+
+    st.dataframe(
+        auto_df[
+            [
+                "馬番", "馬名", "最高", "距離",
+                "コース", "調教評価", "調教点",
+                "総合点", "印"
+            ]
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
     st.header(f"🏆 {race_name} 全頭評価")
 
     st.dataframe(
