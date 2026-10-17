@@ -843,17 +843,12 @@ if history_bet_file is not None:
             f"収支CSVの読み込みに失敗しました：{e}"
         )
 
+
 st.divider()
 st.header("🔍 STEP 19：予想印ごとの成績分析")
 
 st.write(
-    "過去の検証記録から、予想印ごとの3着以内率や"
-    "平均着順を集計します。"
-)
-
-st.caption(
-    "STEP 18-1で保存した検証記録CSVを使用します。"
-    "複数レース分を1つのCSVにまとめて読み込んでください。"
+    "過去の検証記録から、予想印ごとの成績を集計します。"
 )
 
 analysis_file = st.file_uploader(
@@ -867,43 +862,39 @@ if analysis_file is not None:
         try:
             analysis_file.seek(0)
             analysis_df = pd.read_csv(
-                analysis_file,
-                encoding="utf-8-sig"
+                analysis_file, encoding="utf-8-sig"
             )
         except UnicodeDecodeError:
             analysis_file.seek(0)
             analysis_df = pd.read_csv(
-                analysis_file,
-                encoding="cp932"
+                analysis_file, encoding="cp932"
             )
 
         analysis_df.columns = (
             analysis_df.columns.astype(str).str.strip()
         )
 
-        required_analysis_columns = [
+        required_columns = [
             "レース名", "馬番", "馬名", "評価点", "印", "着順"
         ]
 
-        missing_analysis_columns = [
-            col for col in required_analysis_columns
+        missing_columns = [
+            col for col in required_columns
             if col not in analysis_df.columns
         ]
 
-        if missing_analysis_columns:
+        if missing_columns:
             st.error(
-                "検証記録CSVに必要な列がありません："
-                + "、".join(missing_analysis_columns)
+                "CSVに必要な列がありません："
+                + "、".join(missing_columns)
             )
         else:
             analysis_df["着順"] = pd.to_numeric(
                 analysis_df["着順"], errors="coerce"
             )
-
             analysis_df["評価点"] = pd.to_numeric(
                 analysis_df["評価点"], errors="coerce"
             )
-
             analysis_df["印"] = (
                 analysis_df["印"].fillna("").astype(str).str.strip()
             )
@@ -911,16 +902,12 @@ if analysis_file is not None:
             analysis_df = analysis_df.dropna(
                 subset=["着順", "評価点"]
             )
-
-            # 通常の確定着順が1以上の行だけを対象にする
             analysis_df = analysis_df[
                 analysis_df["着順"] >= 1
             ].copy()
 
             if analysis_df.empty:
-                st.warning(
-                    "分析できる確定着順の記録がありません。"
-                )
+                st.warning("分析できる着順データがありません。")
             else:
                 analysis_df["3着以内"] = (
                     analysis_df["着順"] <= 3
@@ -929,66 +916,45 @@ if analysis_file is not None:
                 st.subheader("印ごとの成績")
 
                 mark_order = ["◎", "○", "▲", "△", "☆"]
+                mark_data = analysis_df[
+                    analysis_df["印"].isin(mark_order)
+                ].copy()
 
-                
-
-        mark_data = analysis_df[
-            analysis_df["印"].isin(mark_order)
-        ].copy()
-
-        mark_summary = (
-            mark_data
-            .groupby("印")
-            .agg(
-                頭数=pd.NamedAgg(
-                    column="着順", aggfunc="count"
-                ),
-                平均着順=pd.NamedAgg(
-                    column="着順", aggfunc="mean"
-                ),
-                平均評価点=pd.NamedAgg(
-                    column="評価点", aggfunc="mean"
-                ),
-            )
-            .reindex(mark_order)
-            .dropna(subset=["頭数"])
-            .reset_index()
-        )
-
-        if not mark_summary.empty:
-            mark_summary["3着以内頭数"] = (
-                mark_data.groupby("印")["3着以内"]
-                .sum()
-                .reindex(mark_summary["印"])
-                .to_numpy()
-            )
-
-if not mark_summary.empty:
-    mark_summary["3着以内頭数"] = (
-        mark_data.groupby("印")["3着以内"]
-        .sum()
-        .reindex(mark_summary["印"])
-        .to_numpy()
-    )
-
-
-                if mark_summary.empty:
-                    st.info(
-                        "◎・○・▲・△・☆の記録がありません。"
-                    )
+                if mark_data.empty:
+                    st.info("分析対象の予想印がありません。")
                 else:
+                    mark_summary = (
+                        mark_data.groupby("印")
+                        .agg(
+                            頭数=pd.NamedAgg(
+                                column="着順", aggfunc="count"
+                            ),
+                            3着以内頭数=pd.NamedAgg(
+                                column="3着以内", aggfunc="sum"
+                            ),
+                            平均着順=pd.NamedAgg(
+                                column="着順", aggfunc="mean"
+                            ),
+                            平均評価点=pd.NamedAgg(
+                                column="評価点", aggfunc="mean"
+                            ),
+                        )
+                        .reindex(mark_order)
+                        .dropna(subset=["頭数"])
+                        .reset_index()
+                    )
+
                     mark_summary["3着以内率(%)"] = (
                         mark_summary["3着以内頭数"]
                         / mark_summary["頭数"] * 100
                     ).round(1)
 
                     mark_summary["平均着順"] = (
-                        mark_summary["平均着順"]
-                    ).round(2)
-
+                        mark_summary["平均着順"].round(2)
+                    )
                     mark_summary["平均評価点"] = (
-                        mark_summary["平均評価点"]
-                    ).round(1)
+                        mark_summary["平均評価点"].round(1)
+                    )
 
                     st.dataframe(
                         mark_summary,
@@ -997,9 +963,7 @@ if not mark_summary.empty:
                     )
 
                     st.bar_chart(
-                        mark_summary.set_index("印")[
-                            "3着以内率(%)"
-                        ]
+                        mark_summary.set_index("印")["3着以内率(%)"]
                     )
 
                 st.subheader("評価点と着順の関係")
@@ -1008,7 +972,11 @@ if not mark_summary.empty:
                     ["評価点", "着順"]
                 ].dropna()
 
-                if len(correlation_data) >= 2:
+                if (
+                    len(correlation_data) >= 2
+                    and correlation_data["評価点"].nunique() > 1
+                    and correlation_data["着順"].nunique() > 1
+                ):
                     correlation = correlation_data[
                         "評価点"
                     ].corr(
@@ -1016,41 +984,33 @@ if not mark_summary.empty:
                         method="spearman"
                     )
 
-                    if pd.notna(correlation):
-                        st.metric(
-                            "評価点と着順の順位相関",
-                            f"{correlation:.3f}"
-                        )
-
-                        st.caption(
-                            "負の値が強いほど、高評価の馬ほど"
-                            "着順の数字が小さい傾向を示します。"
-                            "少数レースでは数値が安定しません。"
-                        )
+                    st.metric(
+                        "評価点と着順の順位相関",
+                        f"{correlation:.3f}"
+                    )
+                    st.caption(
+                        "負の値が強いほど、高評価の馬ほど"
+                        "上位に入る傾向を示します。"
+                        "少数レースでは数値が安定しません。"
+                    )
                 else:
                     st.info(
-                        "相関を計算するには、"
-                        "少なくとも2頭分の記録が必要です。"
+                        "相関の計算には、評価点と着順に"
+                        "ばらつきのある複数頭の記録が必要です。"
                     )
 
-                st.subheader("記録データ")
-
+                st.subheader("読み込んだ記録")
                 st.dataframe(
-                    analysis_df[
-                        required_analysis_columns
-                    ],
+                    analysis_df[required_columns],
                     use_container_width=True,
                     hide_index=True,
                 )
 
                 st.caption(
-                    "この分析は入力された過去データの集計です。"
-                    "出走取消・競走中止などは通常の着順と区別して"
-                    "扱う必要があります。"
-                    "相関や好走率だけで将来の的中を保証することはできません。"
+                    "過去データの集計であり、将来の的中を"
+                    "保証するものではありません。"
+                    "取消・競走中止などは別途扱う必要があります。"
                 )
 
     except Exception as e:
-        st.error(
-            f"検証記録の分析に失敗しました：{e}"
-        )
+        st.error(f"検証記録の分析に失敗しました：{e}")
