@@ -1397,3 +1397,165 @@ else:
         "まだ記録がありません。"
         "予想と結果を照合し、保存ボタンを押してください。"
     )
+
+# ========================================
+# STEP 18：過去レースデータの取り込み
+# ========================================
+st.header("📚 STEP 18：過去レースデータの分析")
+
+st.write(
+    "過去レースの各評価項目と確定着順を読み込み、"
+    "予想基準を検証するためのデータを作成します。"
+)
+
+historical_columns = [
+    "レースID",
+    "馬番",
+    "馬名",
+    "近走成績",
+    "距離適性",
+    "脚質・展開",
+    "血統適性",
+    "調教評価",
+    "馬場適性",
+    "着順",
+]
+
+historical_sample = pd.DataFrame({
+    "レースID": [
+        "2026_sample_01",
+        "2026_sample_01",
+        "2026_sample_01",
+        "2026_sample_01",
+        "2026_sample_01",
+    ],
+    "馬番": [1, 2, 3, 4, 5],
+    "馬名": [
+        "サンプルA",
+        "サンプルB",
+        "サンプルC",
+        "サンプルD",
+        "サンプルE",
+    ],
+    "近走成績": [90, 80, 75, 65, 60],
+    "距離適性": [85, 80, 90, 70, 65],
+    "脚質・展開": [80, 85, 75, 70, 60],
+    "血統適性": [80, 75, 85, 70, 65],
+    "調教評価": [85, 80, 75, 70, 60],
+    "馬場適性": [80, 85, 75, 70, 65],
+    "着順": [1, 3, 2, 4, 5],
+})
+
+st.download_button(
+    label="📥 過去レースCSVのサンプルをダウンロード",
+    data=historical_sample.to_csv(
+        index=False
+    ).encode("utf-8-sig"),
+    file_name="historical_race_sample.csv",
+    mime="text/csv",
+)
+
+historical_file = st.file_uploader(
+    "過去レースデータCSVをアップロード",
+    type=["csv"],
+    key="historical_race_uploader",
+)
+
+if historical_file is not None:
+    try:
+        try:
+            historical_file.seek(0)
+            historical_df = pd.read_csv(
+                historical_file,
+                encoding="utf-8-sig"
+            )
+        except UnicodeDecodeError:
+            historical_file.seek(0)
+            historical_df = pd.read_csv(
+                historical_file,
+                encoding="cp932"
+            )
+
+        historical_df.columns = (
+            historical_df.columns.astype(str).str.strip()
+        )
+
+        missing_columns = [
+            col for col in historical_columns
+            if col not in historical_df.columns
+        ]
+
+        if missing_columns:
+            st.error(
+                "不足している列："
+                + "、".join(missing_columns)
+            )
+            st.caption(
+                "サンプルCSVをダウンロードし、"
+                "列名を合わせてください。"
+            )
+        else:
+            historical_df = historical_df[
+                historical_columns
+            ].copy()
+
+            numeric_columns = [
+                "馬番",
+                "近走成績",
+                "距離適性",
+                "脚質・展開",
+                "血統適性",
+                "調教評価",
+                "馬場適性",
+                "着順",
+            ]
+
+            for col in numeric_columns:
+                historical_df[col] = pd.to_numeric(
+                    historical_df[col],
+                    errors="coerce"
+                )
+
+            if historical_df[numeric_columns].isna().any().any():
+                st.error(
+                    "数値の列に空欄や数値以外のデータがあります。"
+                    "CSVを確認してください。"
+                )
+            elif (
+                (historical_df["着順"] < 1).any()
+                or (historical_df["馬番"] < 1).any()
+            ):
+                st.error(
+                    "馬番と着順は1以上の数値にしてください。"
+                )
+            elif (
+                historical_df["レースID"].isna().any()
+                or historical_df["レースID"].astype(str).str.strip().eq("").any()
+            ):
+                st.error("レースIDに空欄があります。")
+            elif historical_df.duplicated(
+                subset=["レースID", "馬番"]
+            ).any():
+                st.error(
+                    "同じレースIDに重複した馬番があります。"
+                )
+            else:
+                st.success(
+                    f"{len(historical_df)}頭分のデータを読み込みました。"
+                )
+
+                st.metric(
+                    "読み込んだレース数",
+                    f"{historical_df['レースID'].nunique()}レース"
+                )
+
+                st.dataframe(
+                    historical_df,
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+    except Exception as e:
+        st.error(
+            f"CSVの読み込みに失敗しました：{e}"
+        )
