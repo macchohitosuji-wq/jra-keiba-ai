@@ -1,12 +1,30 @@
 
+
 import streamlit as st
 import pandas as pd
 from datetime import date
+import json
+
 st.set_page_config(
     page_title="JRA競馬予想AI",
     page_icon="🏇",
     layout="wide"
 )
+
+
+# 過去レースの記録を管理
+if "race_history" not in st.session_state:
+    try:
+        with open(
+            "race_history.json",
+            "r",
+            encoding="utf-8"
+        ) as f:
+            st.session_state["race_history"] = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        st.session_state["race_history"] = []
+
+
 
 st.title("🏇 JRA競馬予想AI")
 st.write("全頭評価と買い目提案を目指す開発版です。")
@@ -143,6 +161,59 @@ if st.button("出馬表を読み込む"):
                 use_container_width=True,
                 hide_index=True
             )
+            
+                    # 照合結果を保存
+                    if st.button("💾 このレースの結果を保存"):
+                        race_key = (
+                            f"{race_date}_{racecourse}_{race_number}"
+                        )
+
+                        already_saved = any(
+                            row["レースID"] == race_key
+                            for row in st.session_state["race_history"]
+                        )
+
+                        if already_saved:
+                            st.warning(
+                                "このレースはすでに保存されています。"
+                            )
+                        else:
+                            for _, row in comparison.iterrows():
+                                st.session_state["race_history"].append({
+                                    "レースID": race_key,
+                                    "開催日": str(race_date),
+                                    "競馬場": racecourse,
+                                    "レース番号": f"{race_number}R",
+                                    "馬番": int(row["馬番"]),
+                                    "馬名": row["馬名"],
+                                    "評価点": float(row["評価点"]),
+                                    "印": row["印"],
+                                    "着順": int(row["着順"]),
+                                })
+
+                            st.success(
+                                f"{len(comparison)}頭分の結果を保存しました！"
+                            )
+                            
+                            try:
+                                with open(
+                                    "race_history.json",
+                                    "w",
+                                    encoding="utf-8"
+                                ) as f:
+                                    json.dump(
+                                        st.session_state["race_history"],
+                                        f,
+                                        ensure_ascii=False,
+                                        indent=2
+                                    )
+
+                                st.success("記録をファイルに保存しました。")
+
+                            except Exception as e:
+                                st.error(f"ファイル保存に失敗しました：{e}")
+
+
             st.success(
                 f"{len(parsed_racecard)}頭のデータを取り込みました。"
             )
@@ -1214,3 +1285,54 @@ if analysis_file is not None:
 
     except Exception as e:
         st.error(f"検証記録の分析に失敗しました：{e}")
+        
+# ========================================
+# 過去レースの記録一覧
+# ========================================
+st.header("📚 過去レースの記録")
+
+history = st.session_state["race_history"]
+
+if history:
+    history_df = pd.DataFrame(history)
+
+    st.dataframe(
+        history_df,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    # CSVでダウンロード
+    st.download_button(
+        label="📥 過去レースの記録をCSV保存",
+        data=history_df.to_csv(
+            index=False
+        ).encode("utf-8-sig"),
+        file_name="jra_race_history.csv",
+        mime="text/csv",
+    )
+
+    # ◎の複勝率を集計
+    honmei_df = history_df[
+        history_df["印"] == "◎"
+    ]
+
+    if not honmei_df.empty:
+        place_rate = (
+            (honmei_df["着順"] <= 3).mean() * 100
+        )
+
+        st.metric(
+            "◎の複勝率",
+            f"{place_rate:.1f}%"
+        )
+
+        st.caption(
+            f"集計対象：◎ {len(honmei_df)}頭分"
+        )
+else:
+    st.info(
+        "まだ記録がありません。"
+        "予想と結果を照合し、保存ボタンを押してください。"
+    )
+
