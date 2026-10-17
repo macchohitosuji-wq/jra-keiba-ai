@@ -61,7 +61,42 @@ columns = [
     "脚質・展開", "血統適性", "調教評価", "馬場適性"
 ]
 st.subheader("📋 出馬表のコピペ取り込み")
+import re
 
+def parse_racecard(text):
+    rows = []
+
+    for line in text.splitlines():
+        line = line.strip()
+
+        if not line:
+            continue
+
+        # 馬番・馬名・性齢・斤量・騎手・厩舎・馬体重・オッズ・人気を抽出
+        match = re.search(
+            r"^\s*(\d+)\s+(\d+)\s+--\s+(.+?)\s+"
+            r"(牡\d+|牝\d+|セ\d+)\s+"
+            r"([\d.]+)\s+(.+?)\s+"
+            r"((?:美浦|栗東)\S+)\s+"
+            r"(\d+\([+-]\d+\))\s+"
+            r"([\d.]+)\s+(\d+)",
+            line
+        )
+
+        if match:
+            rows.append({
+                "馬番": int(match.group(2)),
+                "馬名": match.group(3),
+                "性齢": match.group(4),
+                "斤量": float(match.group(5)),
+                "騎手": match.group(6),
+                "厩舎": match.group(7),
+                "馬体重": match.group(8),
+                "オッズ": float(match.group(9)),
+                "人気": int(match.group(10)),
+            })
+
+    return pd.DataFrame(rows)
 racecard_text = st.text_area(
     "出馬表をそのまま貼り付けてください",
     height=300,
