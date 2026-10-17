@@ -1,7 +1,7 @@
 
 import streamlit as st
 import pandas as pd
-
+from datetime import date
 st.set_page_config(
     page_title="JRA競馬予想AI",
     page_icon="🏇",
@@ -16,7 +16,22 @@ st.info(
 )
 
 st.sidebar.header("レース設定")
+race_date = st.sidebar.date_input(
+    "開催日",
+    value=date.today()
+)
 
+racecourse = st.sidebar.selectbox(
+    "競馬場",
+    ["東京", "中山", "京都", "阪神", "中京",
+     "新潟", "福島", "小倉", "札幌", "函館"]
+)
+
+race_number = st.sidebar.selectbox(
+    "レース番号",
+    list(range(1, 13)),
+    format_func=lambda x: f"{x}R"
+)
 race_name = st.sidebar.text_input("レース名", "東京 11R")
 
 budget = st.sidebar.number_input(
