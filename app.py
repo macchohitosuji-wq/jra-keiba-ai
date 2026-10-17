@@ -469,6 +469,10 @@ if st.button("タイム指数を読み取る"):
         for line in time_index_text.splitlines()
         if line.strip()
     ]
+    st.write("コピー内容の確認")
+    st.code(repr(time_index_text[:1000]))
+    st.write("ここまでが確認用です")
+
 
     parsed_horses = []
     i = 0
