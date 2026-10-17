@@ -541,6 +541,54 @@ if result_file is not None:
                         use_container_width=True,
                         hide_index=True,
                     )
+                    
+                    # 照合結果を保存
+                    if st.button("💾 このレースの結果を保存"):
+                        race_key = (
+                            f"{race_date}_{racecourse}_{race_number}"
+                        )
+
+                        already_saved = any(
+                            row["レースID"] == race_key
+                            for row in st.session_state["race_history"]
+                        )
+
+                        if already_saved:
+                            st.warning("このレースはすでに保存されています。")
+                        else:
+                            for _, row in comparison.iterrows():
+                                st.session_state["race_history"].append({
+                                    "レースID": race_key,
+                                    "開催日": str(race_date),
+                                    "競馬場": racecourse,
+                                    "レース番号": f"{race_number}R",
+                                    "馬番": int(row["馬番"]),
+                                    "馬名": row["馬名"],
+                                    "評価点": float(row["評価点"]),
+                                    "印": row["印"],
+                                    "着順": int(row["着順"]),
+                                })
+
+                            try:
+                                with open(
+                                    "race_history.json",
+                                    "w",
+                                    encoding="utf-8"
+                                ) as f:
+                                    json.dump(
+                                        st.session_state["race_history"],
+                                        f,
+                                        ensure_ascii=False,
+                                        indent=2
+                                    )
+
+                                st.success(
+                                    f"{len(comparison)}頭分の結果を保存しました！"
+                                )
+
+                            except Exception as e:
+                                st.error(f"ファイル保存に失敗しました：{e}")
+
 
                     # ◎の実際の着順
                     honmei = comparison[
