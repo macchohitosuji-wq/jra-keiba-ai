@@ -820,13 +820,15 @@ if (
         )
 
     # 0〜100点に換算する
+    
     def normalize_score(series):
-    series = pd.to_numeric(series, errors="coerce")
+        series = pd.to_numeric(series, errors="coerce")
 
-    # タイム指数の仮の基準：50を0点、110を100点
-    score = (series - 50) / 60 * 100
+        # 仮の基準：指数50を0点、110を100点に換算
+        score = (series - 50) / 60 * 100
 
-    return score.clip(0, 100).fillna(50)
+        return score.clip(0, 100).fillna(50)
+
 
     auto_df["最高点"] = normalize_score(auto_df["最高"])
     auto_df["距離点"] = normalize_score(auto_df["距離"])
