@@ -440,7 +440,23 @@ if not recent_results.empty:
     st.caption(
         "暫定ルールによる点数です。未入力の走は平均から除外します。"
         "この点数は実証済みの予測モデルではありません。"
-    )        
+    )
+    # 近走成績の自動評価を出走馬データに反映
+if not recent_results.empty:
+    recent_score_map = (
+        recent_results
+        .dropna(subset=["馬番", "自動算出_近走成績"])
+        .set_index("馬番")["自動算出_近走成績"]
+        .to_dict()
+    )
+
+    for index, row in horses_input.iterrows():
+        horse_number = row["馬番"]
+
+        if horse_number in recent_score_map:
+            horses_input.at[index, "近走成績"] = (
+                recent_score_map[horse_number]
+            )
 
 
 # ========================================
