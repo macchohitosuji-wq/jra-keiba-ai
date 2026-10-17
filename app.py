@@ -460,94 +460,77 @@ training_text = st.text_area(
 )
 
 
+
 if st.button("調教データを読み取る"):
     import re
 
-    # Markdownの表から1頭ずつデータを読み取る
     lines = [
         line.strip()
         for line in training_text.splitlines()
         if line.strip()
     ]
-    st.write("調教データのコピー内容（確認用）")
-    st.code(repr(training_text[:1500]))
 
     parsed_training = []
+    i = 0
 
-    for line in lines:
-        if "|" not in line:
-            continue
-
-        # Markdown表の区切りを分割
-        cells = [cell.strip() for cell in line.strip("|").split("|")]
-
-        # 見出し・罫線は除外
-        if len(cells) < 14:
-            continue
-
-        if all(
-            re.fullmatch(r":?-+:?", re.sub(r"\s", "", cell))
-            for cell in cells
+    while i < len(lines):
+        # 馬番 → 印(--など) → 馬名とデータ
+        if (
+            re.fullmatch(r"\d{1,2}", lines[i])
+            and i + 2 < len(lines)
+            and re.fullmatch(r"--?", lines[i + 1])
         ):
-            continue
-
-        # Markdownの太字・リンクを除去
-        cleaned = []
-
-        for cell in cells:
-            cell = re.sub(
-                r"\[([^\]]+)\]\([^)]+\)",
-                r"\1",
-                cell
-            )
-            cell = cell.replace("**", "").strip()
-            cleaned.append(cell)
-
-        # 馬番、馬名、調教評価を抽出
-        try:
-            number = int(cleaned[0])
-        except (ValueError, IndexError):
-            continue
-
-        name = cleaned[2]
-
-        rating_match = re.search(
-            r"調教:([ABC])",
-            cleaned[3]
-        )
-
-        if not rating_match:
-            continue
-
-        # 1着・2着・3着・4着以下・出走回数
-        try:
-            results = [
-                int(cleaned[i].replace(",", ""))
-                for i in range(4, 9)
+            number = int(lines[i])
+            parts = [
+                p.strip()
+                for p in lines[i + 2].split("\t")
+                if p.strip()
             ]
 
-            percentages = [
-                float(cleaned[i].replace("%", "").replace(",", ""))
-                for i in range(9, 14)
-            ]
-        except (ValueError, IndexError):
-            continue
+            if len(parts) >= 13:
+                name = parts[0]
 
-        parsed_training.append({
-            "馬番": number,
-            "馬名": name,
-            "調教評価": rating_match.group(1),
-            "1着": results[0],
-            "2着": results[1],
-            "3着": results[2],
-            "4着以下": results[3],
-            "出走回数": results[4],
-            "勝率(%)": percentages[0],
-            "連対率(%)": percentages[1],
-            "複勝率(%)": percentages[2],
-            "単勝回収率(%)": percentages[3],
-            "複勝回収率(%)": percentages[4],
-        })
+                rating_match = re.search(
+                    r"調教:([ABC])",
+                    parts[1]
+                )
+
+                try:
+                    results = [
+                        int(parts[j].replace(",", ""))
+                        for j in range(2, 7)
+                    ]
+
+                    percentages = [
+                        float(
+                            parts[j].replace("%", "").replace(",", "")
+                        )
+                        for j in range(7, 12)
+                    ]
+
+                    if rating_match:
+                        parsed_training.append({
+                            "馬番": number,
+                            "馬名": name,
+                            "調教評価": rating_match.group(1),
+                            "1着": results[0],
+                            "2着": results[1],
+                            "3着": results[2],
+                            "4着以下": results[3],
+                            "出走回数": results[4],
+                            "勝率(%)": percentages[0],
+                            "連対率(%)": percentages[1],
+                            "複勝率(%)": percentages[2],
+                            "単勝回収率(%)": percentages[3],
+                            "複勝回収率(%)": percentages[4],
+                        })
+
+                except (ValueError, IndexError):
+                    pass
+
+            i += 3
+        else:
+            i += 1
 
     if parsed_training:
         training_df = pd.DataFrame(parsed_training)
@@ -574,7 +557,7 @@ if st.button("調教データを読み取る"):
     else:
         st.error(
             "データを読み取れませんでした。"
-            "表全体をコピーして貼り付けてください。"
+            "コピー内容と列の区切りを確認しましょう。"
         )
 
 st.header("📋 出走馬データ")
