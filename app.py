@@ -922,27 +922,27 @@ if analysis_file is not None:
 
                 if mark_data.empty:
                     st.info("分析対象の予想印がありません。")
-                else:
+                else:                        
+                    mark_summary = mark_data.groupby("印").agg({
+                        "着順": ["count", "mean"],
+                        "3着以内": "sum",
+                        "評価点": "mean",
+                    })
+
+                    mark_summary.columns = [
+                        "頭数",
+                        "平均着順",
+                        "3着以内頭数",
+                        "平均評価点",
+                    ]
+
                     mark_summary = (
-                        mark_data.groupby("印")
-                        .agg(
-                            頭数=pd.NamedAgg(
-                                column="着順", aggfunc="count"
-                            ),
-                            3着以内頭数=pd.NamedAgg(
-                                column="3着以内", aggfunc="sum"
-                            ),
-                            平均着順=pd.NamedAgg(
-                                column="着順", aggfunc="mean"
-                            ),
-                            平均評価点=pd.NamedAgg(
-                                column="評価点", aggfunc="mean"
-                            ),
-                        )
+                        mark_summary
                         .reindex(mark_order)
                         .dropna(subset=["頭数"])
                         .reset_index()
                     )
+
 
                     mark_summary["3着以内率(%)"] = (
                         mark_summary["3着以内頭数"]
