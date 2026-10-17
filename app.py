@@ -73,7 +73,38 @@ weights = {
     "調教評価": 0.10,
     "馬場適性": 0.10,
 }
+# ========================================
+# 自動評価機能（無料・ルールベース）
+# ========================================
 
+def calculate_auto_score(row):
+    """
+    実際のデータをもとに評価点を計算するための土台。
+    未評価の項目は勝手に高得点にしない。
+    """
+    score_columns = [
+        "近走成績",
+        "距離適性",
+        "脚質・展開",
+        "血統適性",
+        "調教評価",
+        "馬場適性",
+    ]
+
+    scores = []
+
+    for col in score_columns:
+        value = pd.to_numeric(
+            row.get(col), errors="coerce"
+        )
+
+        if pd.notna(value):
+            scores.append(float(value))
+
+    if not scores:
+        return None
+
+    return round(sum(scores) / len(scores), 1)
 columns = [
     "馬番", "馬名", "オッズ", "人気",
     "近走成績", "距離適性",
@@ -372,7 +403,17 @@ if not horses.empty:
     horses["馬名"] = horses["馬名"].fillna("").astype(str).str.strip()
 
     for col in weights:
-        horses[col] = pd.to_numeric(horses[col], errors="coerce")
+    horses[col] = pd.to_numeric(
+        horses[col], errors="coerce"
+    )
+
+# 6項目すべてが同じ50点の場合は、
+# 自動評価がまだ行われていない可能性がある
+score_columns = list(weights.keys())
+
+horses["評価未確認"] = (
+    horses[score_columns].eq(50).all(axis=1)
+)
 
     horses["評価点"] = sum(
         horses[col] * weight
