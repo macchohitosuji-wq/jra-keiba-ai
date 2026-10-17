@@ -240,23 +240,27 @@ else:
     st.caption(
         "CSVをアップロードしない場合は、サンプルデータから始められます。"
     )
-# コピペした出馬表を予想AIの入力表に反映
-if st.session_state.get("racecard_text"):
+# 出馬表テキストを予想AIの入力表に反映
+# CSVがアップロードされている場合はCSVを優先する
+if uploaded_file is None and st.session_state.get("racecard_text"):
     imported_horses = parse_racecard(
         st.session_state["racecard_text"]
     )
 
     if not imported_horses.empty:
         horses_input = imported_horses[
-    ["馬番", "馬名", "オッズ", "人気"]
-].copy()
+            ["馬番", "馬名", "オッズ", "人気"]
+        ].copy()
 
-        # 評価項目は仮の中立値にする
-        st.warning("近走・距離・脚質・血統・調教・馬場の評価は仮の50点です。予想結果を判断する前に、実際のデータで評価を更新してください。")
+        # 評価項目は仮の中立値
         for col in weights:
             horses_input[col] = 50
 
         horses_input = horses_input[columns]
+
+        st.warning(
+            "テキストから取り込んだ評価項目は仮の50点です。"
+        )
 
         st.success(
             f"予想AIの入力表に{len(horses_input)}頭を反映しました。"
