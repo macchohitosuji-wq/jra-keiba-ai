@@ -449,6 +449,7 @@ if not recent_results.empty:
         .set_index("馬番")["自動算出_近走成績"]
         .to_dict()
     )
+    st.write("近走成績の反映確認", horses_input[["馬番", "馬名", "近走成績"]])
 
     for index, row in horses_input.iterrows():
         horse_number = row["馬番"]
