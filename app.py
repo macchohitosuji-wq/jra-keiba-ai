@@ -489,7 +489,7 @@ if st.button("調教データを読み取る"):
                 if p.strip()
             ]
 
-            if len(parts) >= 13:
+            if len(parts) >= 12:
                 name = parts[0]
 
                 rating_match = re.search(
