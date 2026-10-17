@@ -199,3 +199,168 @@ else:
     st.info("出走馬を1頭以上入力してください。")
 
 st.caption("JRA競馬予想AI 試作版")
+
+st.divider()
+st.header("📊 STEP 17：予想とレース結果の照合")
+
+st.write(
+    "確定着順CSVを読み込み、今回の予想と実際の結果を比較します。"
+)
+
+# 結果CSVのサンプル
+sample_results = pd.DataFrame({
+    "馬番": [1, 2, 3, 4, 5],
+    "着順": [3, 1, 5, 4, 2],
+})
+
+st.download_button(
+    label="📥 結果CSVのサンプルをダウンロード",
+    data=sample_results.to_csv(
+        index=False
+    ).encode("utf-8-sig"),
+    file_name="jra_results_sample.csv",
+    mime="text/csv",
+)
+
+st.caption(
+    "CSVには「馬番」「着順」の列が必要です。"
+    "着順には1、2、3…の確定順位を入力してください。"
+)
+
+result_file = st.file_uploader(
+    "確定着順CSVをアップロード",
+    type=["csv"],
+    key="result_csv_uploader",
+)
+
+if result_file is not None:
+    try:
+        try:
+            result_file.seek(0)
+            results = pd.read_csv(
+                result_file, encoding="utf-8-sig"
+            )
+        except UnicodeDecodeError:
+            result_file.seek(0)
+            results = pd.read_csv(
+                result_file, encoding="cp932"
+            )
+
+        results.columns = (
+            results.columns.astype(str).str.strip()
+        )
+
+        required = ["馬番", "着順"]
+        missing = [
+            col for col in required
+            if col not in results.columns
+        ]
+
+        if missing:
+            st.error(
+                "結果CSVに必要な列がありません："
+                + "、".join(missing)
+            )
+
+        elif horses.empty or "評価点" not in horses.columns:
+            st.error(
+                "先に出走馬データを入力してください。"
+            )
+
+        else:
+            results["馬番"] = pd.to_numeric(
+                results["馬番"], errors="coerce"
+            )
+            results["着順"] = pd.to_numeric(
+                results["着順"], errors="coerce"
+            )
+
+            results = results.dropna(
+                subset=["馬番", "着順"]
+            )
+
+            if results["馬番"].duplicated().any():
+                st.error(
+                    "結果CSVに重複した馬番があります。"
+                    "1頭につき1行にしてください。"
+                )
+            else:
+                predictions = horses[
+                    ["馬番", "馬名", "評価点", "印"]
+                ].copy()
+
+                predictions["馬番"] = pd.to_numeric(
+                    predictions["馬番"],
+                    errors="coerce"
+                )
+
+                comparison = predictions.merge(
+                    results[["馬番", "着順"]],
+                    on="馬番",
+                    how="inner",
+                    validate="one_to_one"
+                )
+
+                if comparison.empty:
+                    st.warning(
+                        "予想データと結果CSVで"
+                        "一致する馬番がありません。"
+                    )
+                else:
+                    comparison = comparison.sort_values(
+                        "評価点", ascending=False
+                    )
+
+                    st.success(
+                        f"{len(comparison)}頭の結果を照合しました。"
+                    )
+
+                    st.subheader("照合結果")
+
+                    st.dataframe(
+                        comparison[
+                            ["馬番", "馬名", "評価点", "印", "着順"]
+                        ].sort_values("着順"),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                    # ◎の実際の着順
+                    honmei = comparison[
+                        comparison["印"] == "◎"
+                    ]
+
+                    if not honmei.empty:
+                        honmei_finish = honmei.iloc[0]["着順"]
+
+                        st.metric(
+                            "◎の確定着順",
+                            f"{int(honmei_finish)}着"
+                        )
+
+                        if honmei_finish <= 3:
+                            st.success(
+                                "◎は3着以内に入りました。"
+                            )
+                        else:
+                            st.info(
+                                "◎は3着以内に入りませんでした。"
+                            )
+
+                    # 評価上位3頭のうち実際に3着以内だった頭数
+                    top3 = comparison.head(3)
+                    hits = int((top3["着順"] <= 3).sum())
+
+                    st.metric(
+                        "評価上位3頭の複勝圏入り",
+                        f"{hits} / {len(top3)}頭"
+                    )
+
+                    st.caption(
+                        "これは今回1レースの結果です。"
+                        "長期的な的中率・回収率を示すものではありません。"
+                        "回収率の計算には実際の購入額と払戻額も必要です。"
+                    )
+
+    except Exception as e:
+        st.error(f"結果CSVの読み込みに失敗しました：{e}")
