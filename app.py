@@ -64,37 +64,62 @@ st.subheader("📋 出馬表のコピペ取り込み")
 import re
 
 def parse_racecard(text):
+    lines = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip()
+    ]
+
     rows = []
+    i = 0
 
-    for line in text.splitlines():
-        line = line.strip()
-
-        if not line:
-            continue
-
-        # 馬番・馬名・性齢・斤量・騎手・厩舎・馬体重・オッズ・人気を抽出
-        match = re.search(
-            r"^\s*(\d+)\s+(\d+)\s+--\s+(.+?)\s+"
-            r"(牡\d+|牝\d+|セ\d+)\s+"
-            r"([\d.]+)\s+(.+?)\s+"
-            r"((?:美浦|栗東)\S+)\s+"
-            r"(\d+\([+-]\d+\))\s+"
-            r"([\d.]+)\s+(\d+)",
-            line
+    while i < len(lines):
+        # 枠番＋馬番、または馬番だけの行を探す
+        number_match = re.fullmatch(
+            r"(?:(\d+)\s+)?(\d+)",
+            lines[i]
         )
 
-        if match:
+        if not number_match:
+            i += 1
+            continue
+
+        horse_number = int(number_match.group(2))
+        j = i + 1
+
+        # 「--」を読み飛ばす
+        if j < len(lines) and lines[j] == "--":
+            j += 1
+
+        # 馬名と詳細行がそろっているか確認
+        if j + 1 >= len(lines):
+            i += 1
+            continue
+
+        horse_name = lines[j]
+        details = lines[j + 1].split()
+
+        if (
+            len(details) >= 7
+            and re.fullmatch(r"(牡|牝|セ)\d+", details[0])
+            and details[3].startswith(("美浦", "栗東"))
+            and re.fullmatch(r"\d+\([+-]\d+\)", details[4])
+        ):
             rows.append({
-                "馬番": int(match.group(2)),
-                "馬名": match.group(3),
-                "性齢": match.group(4),
-                "斤量": float(match.group(5)),
-                "騎手": match.group(6),
-                "厩舎": match.group(7),
-                "馬体重": match.group(8),
-                "オッズ": float(match.group(9)),
-                "人気": int(match.group(10)),
+                "馬番": horse_number,
+                "馬名": horse_name,
+                "性齢": details[0],
+                "斤量": float(details[1]),
+                "騎手": details[2],
+                "厩舎": details[3],
+                "馬体重": details[4],
+                "オッズ": float(details[5]),
+                "人気": int(details[6]),
             })
+
+            i = j + 2
+        else:
+            i += 1
 
     return pd.DataFrame(rows)
 racecard_text = st.text_area(
