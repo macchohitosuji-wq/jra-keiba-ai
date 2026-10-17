@@ -227,6 +227,7 @@ if st.session_state.get("racecard_text"):
         horses_input = imported_horses[["馬番", "馬名"]].copy()
 
         # 評価項目は仮の中立値にする
+        st.warning("近走・距離・脚質・血統・調教・馬場の評価は仮の50点です。予想結果を判断する前に、実際のデータで評価を更新してください。")
         for col in weights:
             horses_input[col] = 50
 
