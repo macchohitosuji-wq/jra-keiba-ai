@@ -114,6 +114,69 @@ st.download_button(
     mime="text/csv"
 )
 
+
+st.divider()
+st.subheader("🐎 実際の出走馬を取り込む")
+st.write("JRA公式の出馬表からコピーした馬番・馬名を貼り付けてください。")
+
+race_text = st.text_area(
+    "出馬表のテキスト",
+    placeholder="例：\n1\nサンプルホースA\n2\nサンプルホースB",
+    height=180,
+    key="race_text_input"
+)
+
+if st.button("馬番・馬名を取り込む"):
+    import re
+
+    lines = [
+        line.strip()
+        for line in race_text.splitlines()
+        if line.strip()
+    ]
+
+    imported_horses = []
+    i = 0
+
+    while i < len(lines) - 1:
+        if re.fullmatch(r"\d{1,2}", lines[i]):
+            number = int(lines[i])
+            name = lines[i + 1]
+
+            if (
+                1 <= number <= 18
+                and not re.fullmatch(r"\d{1,2}", name)
+                and len(name) <= 40
+            ):
+                imported_horses.append({
+                    "馬番": number,
+                    "馬名": name
+                })
+                i += 2
+                continue
+
+        i += 1
+
+    if imported_horses:
+        imported_df = pd.DataFrame(imported_horses)
+        imported_df = imported_df.drop_duplicates(
+            subset=["馬番"], keep="first"
+        )
+
+        st.session_state["imported_horses"] = imported_df
+        st.success(
+            f"{len(imported_df)}頭の馬番・馬名を取り込みました。"
+        )
+        st.dataframe(
+            imported_df,
+            use_container_width=True,
+            hide_index=True
+        )
+    else:
+        st.error(
+            "馬番・馬名を読み取れませんでした。"
+            "馬番と馬名が別々の行になるように貼り付けてください。"
+        )
 st.header("📋 出走馬データ")
 st.caption(
     "各評価を0〜100点で入力してください。"
