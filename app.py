@@ -461,6 +461,7 @@ time_index_text = st.text_area(
 
 
 
+
 if st.button("タイム指数を読み取る"):
     import re
 
@@ -469,44 +470,37 @@ if st.button("タイム指数を読み取る"):
         for line in time_index_text.splitlines()
         if line.strip()
     ]
-    st.write("コピー内容の確認")
-    st.code(repr(time_index_text[:1000]))
-    st.write("ここまでが確認用です")
-
 
     parsed_horses = []
     i = 0
 
     while i < len(lines):
-        # 枠番・馬番・印・馬名の順で並ぶ形式に対応
+        # 枠番 → 馬番 → 印 → 馬名とデータ
         if (
-            re.fullmatch(r"\d{1,2}", lines[i])
+            re.fullmatch(r"\d{1,2}\t?", lines[i])
             and i + 3 < len(lines)
             and re.fullmatch(r"\d{1,2}", lines[i + 1])
             and re.fullmatch(r"--?", lines[i + 2])
         ):
-            frame = int(lines[i])
+            frame = int(lines[i].replace("\t", ""))
             number = int(lines[i + 1])
-            name_line = lines[i + 3]
 
-            # 馬名と、年齢・斤量などの情報が同じ行にある
-            parts = re.split(r"\t+", name_line)
+            # 馬名・性齢・斤量・騎手・指数などはタブ区切り
+            parts = [
+                part.strip()
+                for part in lines[i + 3].split("\t")
+                if part.strip()
+            ]
 
-            if len(parts) >= 3:
-                name = parts[0].strip()
-                values = parts[1:]
+            if len(parts) >= 13:
+                name = parts[0]
 
-                # 性齢・斤量・騎手を除いた数値を取得
-                numeric_values = []
-
-                for value in values:
-                    value = value.strip().replace("*", "")
-                    if re.fullmatch(r"\d+(?:\.\d+)?", value):
-                        numeric_values.append(float(value))
-
-                if len(numeric_values) >= 11:
-                    # 性齢・斤量・騎手の後に指数9項目が続く
-                    nums = numeric_values[-9:]
+                # 性齢・斤量・騎手の後ろにある9項目
+                try:
+                    nums = [
+                        float(value.replace("*", ""))
+                        for value in parts[-9:]
+                    ]
 
                     parsed_horses.append({
                         "枠番": frame,
@@ -522,6 +516,8 @@ if st.button("タイム指数を読み取る"):
                         "単勝オッズ": nums[7],
                         "人気": int(nums[8]),
                     })
+                except (ValueError, IndexError):
+                    pass
 
             i += 4
         else:
@@ -533,6 +529,7 @@ if st.button("タイム指数を読み取る"):
         st.success(
             f"{len(parsed_df)}頭分のデータを読み取りました。"
         )
+
         st.dataframe(
             parsed_df,
             use_container_width=True,
@@ -540,14 +537,14 @@ if st.button("タイム指数を読み取る"):
         )
 
         st.caption(
-            "読み取り結果の確認用です。"
-            "まだ予想AIの評価表には反映していません。"
+            "この段階では確認用です。予想AIへの反映はまだ行いません。"
         )
     else:
         st.error(
-            "読み取れませんでした。"
-            "コピー形式をもう一度確認しましょう。"
+            "読み取りに失敗しました。"
+            "入力データと解析形式をもう一度確認しましょう。"
         )
+
 
 
 st.caption(
