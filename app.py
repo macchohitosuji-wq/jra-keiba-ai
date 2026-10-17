@@ -639,9 +639,14 @@ if st.button("タイム指数を読み取る"):
                 name = parts[0]
 
                 # 性齢・斤量・騎手の後ろにある9項目
+                
                 try:
                     nums = [
-                        float(value.replace("*", ""))
+                        (
+                            float(value.replace("*", ""))
+                            if value not in {"未", "-", "--"}
+                            else float("nan")
+                        )
                         for value in parts[-9:]
                     ]
 
@@ -661,6 +666,7 @@ if st.button("タイム指数を読み取る"):
                     })
                 except (ValueError, IndexError):
                     pass
+
 
             i += 4
         else:
