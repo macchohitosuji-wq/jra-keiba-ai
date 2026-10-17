@@ -471,6 +471,8 @@ if st.button("調教データを読み取る"):
     ]
 
     parsed_training = []
+    st.write("確認：読み取った行数", len(lines))
+    st.write("確認：先頭6行", lines[:6])
     i = 0
 
     while i < len(lines):
