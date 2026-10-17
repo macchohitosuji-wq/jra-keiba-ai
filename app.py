@@ -32,6 +32,11 @@ race_number = st.sidebar.selectbox(
     list(range(1, 13)),
     format_func=lambda x: f"{x}R"
 )
+st.sidebar.write("---")
+st.sidebar.write("### 選択中のレース")
+st.sidebar.write(f"開催日：{race_date.strftime('%Y年%m月%d日')}")
+st.sidebar.write(f"競馬場：{racecourse}")
+st.sidebar.write(f"レース：{race_number}R")
 race_name = st.sidebar.text_input("レース名", "東京 11R")
 
 budget = st.sidebar.number_input(
