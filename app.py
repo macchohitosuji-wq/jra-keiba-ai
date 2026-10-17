@@ -217,7 +217,24 @@ else:
     st.caption(
         "CSVをアップロードしない場合は、サンプルデータから始められます。"
     )
+# コピペした出馬表を予想AIの入力表に反映
+if st.session_state.get("racecard_text"):
+    imported_horses = parse_racecard(
+        st.session_state["racecard_text"]
+    )
 
+    if not imported_horses.empty:
+        horses_input = imported_horses[["馬番", "馬名"]].copy()
+
+        # 評価項目は仮の中立値にする
+        for col in weights:
+            horses_input[col] = 50
+
+        horses_input = horses_input[columns]
+
+        st.success(
+            f"予想AIの入力表に{len(horses_input)}頭を反映しました。"
+        )
 st.download_button(
     label="📥 サンプルCSVをダウンロード",
     data=sample.to_csv(index=False).encode("utf-8-sig"),
