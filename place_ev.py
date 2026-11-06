@@ -1,6 +1,6 @@
-
 import streamlit as st
 import pandas as pd
+from io import BytesIO
 
 st.set_page_config(
     page_title="複勝期待値AI",
@@ -9,19 +9,108 @@ st.set_page_config(
 )
 
 st.title("🏇 複勝期待値AI")
-st.caption("JRA全レースから複勝の期待値が高い馬を厳選する開発版")
+st.caption("TARGETの出馬表CSVを読み込み、全出走馬を分析する開発版")
 
-st.info("現在は手入力による期待値計算です。AIによる確率予測は今後追加します。")
+st.info(
+    "現在は出走馬データの取り込みと手入力による期待値計算に対応しています。"
+    "AIによる3着内確率の予測機能は今後追加します。"
+)
 
-st.subheader("① 出走馬データ")
+st.subheader("① TARGETの出馬表CSVを読み込む")
 
-default_data = pd.DataFrame([
-    {"競馬場": "東京", "レース": "1R", "馬名": "テスト馬1", "3着内確率(%)": 60.0, "オッズ下限": 1.5, "オッズ上限": 2.0},
-    {"競馬場": "東京", "レース": "1R", "馬名": "テスト馬2", "3着内確率(%)": 50.0, "オッズ下限": 2.0, "オッズ上限": 2.5},
-    {"競馬場": "京都", "レース": "2R", "馬名": "テスト馬3", "3着内確率(%)": 40.0, "オッズ下限": 3.0, "オッズ上限": 4.0},
-    {"競馬場": "福島", "レース": "3R", "馬名": "テスト馬4", "3着内確率(%)": 30.0, "オッズ下限": 4.0, "オッズ上限": 5.0},
-    {"競馬場": "東京", "レース": "4R", "馬名": "テスト馬5", "3着内確率(%)": 20.0, "オッズ下限": 5.0, "オッズ上限": 8.0},
-])
+uploaded_file = st.file_uploader(
+    "DE261107.CSVなどの出馬表CSVを選択",
+    type=["csv"]
+)
+
+imported_data = None
+
+if uploaded_file is not None:
+    try:
+        try:
+            raw = pd.read_csv(
+                uploaded_file,
+                header=None,
+                dtype=str,
+                encoding="cp932"
+            )
+        except UnicodeDecodeError:
+            uploaded_file.seek(0)
+            raw = pd.read_csv(
+                uploaded_file,
+                header=None,
+                dtype=str,
+                encoding="utf-8-sig"
+            )
+
+        if raw.shape[1] < 22:
+            st.error("CSVの列数が想定より少ないため、形式を確認する必要があります。")
+        else:
+            imported_data = pd.DataFrame({
+                "開催日": raw.iloc[:, 0].str.strip(),
+                "競馬場": raw.iloc[:, 1].str.strip(),
+                "レース": raw.iloc[:, 2].str.strip() + "R",
+                "馬番": raw.iloc[:, 3].str.strip(),
+                "クラス": raw.iloc[:, 4].str.strip(),
+                "コース": raw.iloc[:, 5].str.strip(),
+                "距離": raw.iloc[:, 6].str.strip(),
+                "馬名": raw.iloc[:, 7].str.strip(),
+                "性別": raw.iloc[:, 8].str.strip(),
+                "年齢": raw.iloc[:, 9].str.strip(),
+                "騎手": raw.iloc[:, 10].str.strip(),
+                "斤量": raw.iloc[:, 11].str.strip(),
+                "調教師": raw.iloc[:, 12].str.strip(),
+                "父": raw.iloc[:, 16].str.strip(),
+                "母": raw.iloc[:, 17].str.strip(),
+                "馬ID": raw.iloc[:, 18].str.strip(),
+                "母父": raw.iloc[:, 20].str.strip(),
+            })
+
+            imported_data = imported_data[
+                imported_data["馬名"].notna()
+                & (imported_data["馬名"] != "")
+            ].copy()
+
+            imported_data["3着内確率(%)"] = 0.0
+            imported_data["オッズ下限"] = 1.0
+            imported_data["オッズ上限"] = 1.0
+
+            st.success(
+                f"CSVを読み込みました！ 出走馬数：{len(imported_data)}頭"
+            )
+
+            st.write("読み込んだ出走馬データ")
+            st.dataframe(
+                imported_data[
+                    ["競馬場", "レース", "馬番", "馬名",
+                     "騎手", "斤量", "父", "母", "母父"]
+                ],
+                use_container_width=True,
+                hide_index=True
+            )
+
+    except Exception as e:
+        st.error(f"CSVの読み込みに失敗しました：{e}")
+
+st.divider()
+
+st.subheader("② 期待値計算用データ")
+
+if imported_data is not None and len(imported_data) > 0:
+    default_data = imported_data[
+        ["競馬場", "レース", "馬番", "馬名",
+         "3着内確率(%)", "オッズ下限", "オッズ上限"]
+    ].copy()
+else:
+    st.caption("CSVを読み込むか、以下のテストデータを使用できます。")
+    default_data = pd.DataFrame([
+        {"競馬場": "東京", "レース": "1R", "馬番": "1",
+         "馬名": "テスト馬1", "3着内確率(%)": 60.0,
+         "オッズ下限": 1.5, "オッズ上限": 2.0},
+        {"競馬場": "東京", "レース": "1R", "馬番": "2",
+         "馬名": "テスト馬2", "3着内確率(%)": 50.0,
+         "オッズ下限": 2.0, "オッズ上限": 2.5},
+    ])
 
 horses = st.data_editor(
     default_data,
@@ -37,9 +126,12 @@ horses = st.data_editor(
     }
 )
 
-st.caption("行を追加して馬を増やせます。数値はテスト用なので自由に変更してください。")
+st.caption(
+    "3着内確率と複勝オッズは、現段階では手入力です。"
+    "CSVから取り込んだだけではAI予測値にはなりません。"
+)
 
-st.subheader("② 期待値ランキング設定")
+st.subheader("③ 期待値ランキング")
 
 threshold = st.number_input(
     "買い候補にする保守的期待値",
@@ -49,16 +141,12 @@ threshold = st.number_input(
 )
 
 if st.button("🏇 全馬の期待値を計算", type="primary"):
-
     results = []
     errors = []
 
     for index, horse in horses.iterrows():
         try:
             name = str(horse["馬名"]).strip()
-            venue = str(horse["競馬場"]).strip()
-            race = str(horse["レース"]).strip()
-
             if not name:
                 continue
 
@@ -76,21 +164,18 @@ if st.button("🏇 全馬の期待値を計算", type="primary"):
 
             mid = (low + high) / 2
 
-            ev_low = p * low
-            ev_mid = p * mid
-            ev_high = p * high
-
             results.append({
-                "競馬場": venue,
-                "レース": race,
+                "競馬場": horse["競馬場"],
+                "レース": horse["レース"],
+                "馬番": horse["馬番"],
                 "馬名": name,
                 "3着内確率(%)": p * 100,
                 "複勝下限": low,
                 "複勝上限": high,
-                "保守的期待値": ev_low,
-                "中央値期待値": ev_mid,
-                "上限期待値": ev_high,
-                "判定": "候補" if ev_low > threshold else "見送り"
+                "保守的期待値": p * low,
+                "中央値期待値": p * mid,
+                "上限期待値": p * high,
+                "判定": "候補" if p * low > threshold else "見送り"
             })
 
         except (ValueError, TypeError, KeyError):
@@ -101,15 +186,12 @@ if st.button("🏇 全馬の期待値を計算", type="primary"):
 
     if results:
         df = pd.DataFrame(results)
-
         df = df.sort_values(
             ["保守的期待値", "中央値期待値"],
             ascending=False
         ).reset_index(drop=True)
 
         df.insert(0, "順位", range(1, len(df) + 1))
-
-        st.subheader("③ 全馬ランキング")
 
         st.dataframe(
             df.style.format({
@@ -126,22 +208,15 @@ if st.button("🏇 全馬の期待値を計算", type="primary"):
 
         candidates = df[df["保守的期待値"] > threshold]
 
-        st.subheader("④ 厳選候補")
-
         col1, col2 = st.columns(2)
-
         col1.metric("分析した馬", len(df))
         col2.metric("買い候補", len(candidates))
 
         if len(candidates) > 0:
-            st.success("保守的期待値の基準を満たした馬")
-            st.dataframe(
-                candidates,
-                use_container_width=True,
-                hide_index=True
-            )
+            st.success("期待値の基準を満たした馬")
+            st.dataframe(candidates, use_container_width=True, hide_index=True)
         else:
-            st.warning("条件を満たす馬はいません。無理に購入する必要はありません。")
+            st.warning("条件を満たす馬はいません。")
 
         csv = df.to_csv(index=False).encode("utf-8-sig")
 
@@ -151,13 +226,3 @@ if st.button("🏇 全馬の期待値を計算", type="primary"):
             file_name="place_ev_ranking.csv",
             mime="text/csv"
         )
-
-        st.caption(
-            "期待値＝3着内確率×複勝オッズ。"
-            "この数値は入力した確率が正確であることを前提とした理論値です。"
-        )
-
-    else:
-        st.warning("計算できる馬がありません。入力内容を確認してください。")
-        
-
