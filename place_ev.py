@@ -159,4 +159,5 @@ if st.button("🏇 全馬の期待値を計算", type="primary"):
 
     else:
         st.warning("計算できる馬がありません。入力内容を確認してください。")
+        
 
