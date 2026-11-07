@@ -236,6 +236,70 @@ def prepare_entries(uploaded_file):
     return entries
 
 
+
+VENUE_CODE_MAP = {
+    "01": "札幌", "02": "函館", "03": "福島", "04": "新潟",
+    "05": "東京", "06": "中山", "07": "中京", "08": "京都",
+    "09": "阪神", "10": "小倉"
+}
+
+def prepare_place_odds(uploaded_file):
+    """TARGETの複勝オッズCSV（レースID＋馬番別Lo/Hi）を縦形式に変換する。"""
+    uploaded_file.seek(0)
+    try:
+        raw = pd.read_csv(uploaded_file, dtype=str, encoding="cp932")
+    except UnicodeDecodeError:
+        uploaded_file.seek(0)
+        raw = pd.read_csv(uploaded_file, dtype=str, encoding="utf-8-sig")
+
+    raw.columns = [str(c).strip() for c in raw.columns]
+    if "レースID" not in raw.columns:
+        raise ValueError("CSVに『レースID』列がありません。TARGETの複勝オッズCSVを選択してください。")
+
+    rows = []
+    for _, row in raw.iterrows():
+        race_id = clean_id(row.get("レースID", ""))
+        if len(race_id) < 16 or not race_id[:8].isdigit():
+            continue
+        date = pd.to_datetime(race_id[:8], format="%Y%m%d", errors="coerce")
+        venue_code = race_id[8:10]
+        venue = VENUE_CODE_MAP.get(venue_code)
+        race_no = str(int(race_id[-2:])) if race_id[-2:].isdigit() else ""
+        if pd.isna(date) or venue is None or not race_no:
+            continue
+
+        for horse_no in range(1, 19):
+            low_col, high_col = f"{horse_no}-Lo", f"{horse_no}-Hi"
+            if low_col not in raw.columns or high_col not in raw.columns:
+                continue
+            low = pd.to_numeric(row.get(low_col), errors="coerce")
+            high = pd.to_numeric(row.get(high_col), errors="coerce")
+            if pd.notna(low) and pd.notna(high) and low >= 1 and high >= low:
+                rows.append({
+                    "開催日": date, "競馬場": venue, "レース番号_key": race_no,
+                    "馬番_key": str(horse_no),
+                    "複勝オッズ下限": float(low), "複勝オッズ上限": float(high)
+                })
+
+    odds = pd.DataFrame(rows)
+    if odds.empty:
+        raise ValueError("有効な複勝オッズが見つかりません。Lo/Hi列とレースIDを確認してください。")
+    return odds.drop_duplicates(
+        ["開催日", "競馬場", "レース番号_key", "馬番_key"], keep="last"
+    )
+
+
+def attach_place_odds(predictions, odds):
+    """開催日・競馬場・レース番号・馬番で複勝オッズを照合する。"""
+    result = predictions.copy()
+    result["レース番号_key"] = result["レース"].astype(str).str.extract(r"(\d+)", expand=False)
+    result["馬番_key"] = result["馬番"].astype(str).str.replace(r"\.0$", "", regex=True).str.strip()
+    result["開催日"] = pd.to_datetime(result["開催日"], errors="coerce")
+    result = result.merge(
+        odds, on=["開催日", "競馬場", "レース番号_key", "馬番_key"], how="left", validate="many_to_one"
+    )
+    return result.drop(columns=["レース番号_key", "馬番_key"])
+
 def predict_entries(entries, valid, model):
     predictions = []
     history_by_id = {k: g.sort_values(["開催日", "レースID"]) for k, g in valid.groupby("馬ID")}
@@ -372,84 +436,78 @@ if entries_file is not None:
                 hide_index=True
             )
 
-            st.subheader("④ 複勝オッズを入力して期待値を計算")
-            odds_input = predictions.copy()
-            odds_input["複勝オッズ下限"] = np.nan
-            odds_input["複勝オッズ上限"] = np.nan
-            editable = st.data_editor(
-                odds_input,
-                use_container_width=True,
-                hide_index=True,
-                key=f"odds_editor_{entries_file.name}",
-                disabled=[
-                    "開催日", "競馬場", "レース", "馬番", "馬名", "騎手",
-                    "AI3着内確率(%)", "照合方法", "AI判定"
-                ],
-                column_config={
-                    "複勝オッズ下限": st.column_config.NumberColumn(
-                        "複勝オッズ下限", min_value=1.0, step=0.1, format="%.1f"
-                    ),
-                    "複勝オッズ上限": st.column_config.NumberColumn(
-                        "複勝オッズ上限", min_value=1.0, step=0.1, format="%.1f"
-                    ),
-                    "AI3着内確率(%)": st.column_config.NumberColumn(
-                        "AI3着内確率(%)", format="%.1f", disabled=True
+            st.subheader("④ TARGET複勝オッズCSVを読み込む")
+            odds_file = st.file_uploader(
+                "複勝オッズCSVを選択（例：261107huku.csv）",
+                type=["csv"],
+                key="place_odds_csv"
+            )
+
+            if odds_file is not None:
+                try:
+                    odds_data = prepare_place_odds(odds_file)
+                    results_base = attach_place_odds(predictions, odds_data)
+                    matched = results_base["複勝オッズ下限"].notna().sum()
+                    st.success(
+                        f"複勝オッズを読み込みました：{len(odds_data):,}頭分 / "
+                        f"出馬表との照合：{matched:,}頭 / {len(predictions):,}頭"
                     )
-                }
-            )
+                    if matched == 0:
+                        st.error("出馬表とオッズが1頭も一致しません。開催日・競馬場・レース番号・馬番を確認してください。")
+                    else:
+                        st.caption("オッズはレースIDから開催日・競馬場・レース番号を取得し、馬番で照合しています。")
+                        threshold = st.number_input(
+                            "買い候補にする保守的期待値の基準",
+                            min_value=0.5, max_value=3.0, value=1.05, step=0.05,
+                            help="AI3着内確率 × 複勝オッズ下限。1.00が理論上の損益分岐目安です。"
+                        )
+                        if st.button("🏇 複勝期待値を計算", type="primary"):
+                            results = results_base.copy()
+                            results["保守的期待値"] = (
+                                results["AI3着内確率(%)"] / 100 * results["複勝オッズ下限"]
+                            )
+                            results["中央値期待値"] = (
+                                results["AI3着内確率(%)"] / 100
+                                * (results["複勝オッズ下限"] + results["複勝オッズ上限"]) / 2
+                            )
+                            results["判定"] = "判定保留"
+                            has_prediction = results["AI判定"].eq("予測あり")
+                            has_odds = (
+                                results["複勝オッズ下限"].notna()
+                                & results["複勝オッズ上限"].notna()
+                                & (results["複勝オッズ下限"] >= 1)
+                                & (results["複勝オッズ上限"] >= results["複勝オッズ下限"])
+                            )
+                            valid_rows = has_prediction & has_odds
+                            results.loc[~has_prediction, "判定"] = "履歴不足"
+                            results.loc[has_prediction & ~has_odds, "判定"] = "オッズ未取得"
+                            results.loc[valid_rows & (results["保守的期待値"] > threshold), "判定"] = "候補"
+                            results.loc[valid_rows & (results["保守的期待値"] <= threshold), "判定"] = "見送り"
+                            results = results.sort_values(
+                                "保守的期待値", ascending=False, na_position="last"
+                            ).reset_index(drop=True)
+                            results.insert(0, "順位", range(1, len(results) + 1))
+                            st.dataframe(results, use_container_width=True, hide_index=True)
+                            candidates = results[results["判定"].eq("候補")]
+                            a, b, c = st.columns(3)
+                            a.metric("分析した馬", len(results))
+                            b.metric("期待値候補", len(candidates))
+                            c.metric("履歴不足", int(results["判定"].eq("履歴不足").sum()))
+                            if candidates.empty:
+                                st.info("基準を満たす候補はありません。無理に買う必要はありません。")
+                            else:
+                                st.success("保守的期待値の基準を満たした候補")
+                                st.dataframe(candidates, use_container_width=True, hide_index=True)
+                            out = results.to_csv(index=False).encode("utf-8-sig")
+                            st.download_button(
+                                "分析結果をCSV保存", data=out,
+                                file_name="place_ev_today_ranking.csv", mime="text/csv"
+                            )
+                except Exception as e:
+                    st.error(f"複勝オッズCSVの処理でエラーが発生しました：{e}")
+            else:
+                st.info("複勝オッズCSVをアップロードすると、全馬のオッズを自動照合します。")
 
-            threshold = st.number_input(
-                "買い候補にする保守的期待値の基準",
-                min_value=0.5, max_value=3.0, value=1.05, step=0.05,
-                help="AI確率×複勝オッズ下限。1.00は理論上の損益分岐目安ですが、誤差や控除を考慮して初期値を1.05にしています。"
-            )
-
-            if st.button("🏇 複勝期待値を計算", type="primary"):
-                results = editable.copy()
-                results["保守的期待値"] = (
-                    results["AI3着内確率(%)"] / 100 * results["複勝オッズ下限"]
-                )
-                results["中央値期待値"] = (
-                    results["AI3着内確率(%)"] / 100
-                    * (results["複勝オッズ下限"] + results["複勝オッズ上限"]) / 2
-                )
-                results["判定"] = "判定保留"
-                has_prediction = results["AI判定"].eq("予測あり")
-                has_odds = (
-                    results["複勝オッズ下限"].notna()
-                    & results["複勝オッズ上限"].notna()
-                    & (results["複勝オッズ下限"] >= 1)
-                    & (results["複勝オッズ上限"] >= results["複勝オッズ下限"])
-                )
-                valid_rows = has_prediction & has_odds
-                results.loc[~has_prediction, "判定"] = "履歴不足"
-                results.loc[has_prediction & ~has_odds, "判定"] = "オッズ未入力"
-                results.loc[valid_rows & (results["保守的期待値"] > threshold), "判定"] = "候補"
-                results.loc[valid_rows & (results["保守的期待値"] <= threshold), "判定"] = "見送り"
-                results = results.sort_values(
-                    "保守的期待値", ascending=False, na_position="last"
-                ).reset_index(drop=True)
-                results.insert(0, "順位", range(1, len(results) + 1))
-
-                st.dataframe(results, use_container_width=True, hide_index=True)
-                candidates = results[results["判定"].eq("候補")]
-                a, b, c = st.columns(3)
-                a.metric("分析した馬", len(results))
-                b.metric("期待値候補", len(candidates))
-                c.metric("履歴不足", int(results["判定"].eq("履歴不足").sum()))
-                if candidates.empty:
-                    st.info("基準を満たす候補はありません。無理に買う必要はありません。")
-                else:
-                    st.success("保守的期待値の基準を満たした候補")
-                    st.dataframe(candidates, use_container_width=True, hide_index=True)
-
-                out = results.to_csv(index=False).encode("utf-8-sig")
-                st.download_button(
-                    "分析結果をCSV保存",
-                    data=out,
-                    file_name="place_ev_today_ranking.csv",
-                    mime="text/csv"
-                )
     except Exception as e:
         st.error(f"出馬表CSVの処理でエラーが発生しました：{e}")
 else:
@@ -457,6 +515,6 @@ else:
 
 st.divider()
 st.caption(
-    "注意：この初版は複勝確率の試作モデルです。複勝オッズは手入力で、現時点では自動取得していません。"
-    "オッズの下限・上限を入力してから期待値を計算してください。"
+    "注意：この初版は複勝確率の試作モデルです。複勝オッズはTARGET出力CSVから読み込みます。"
+    "AI確率・期待値は検証用であり、回収率を保証するものではありません。"
 )
